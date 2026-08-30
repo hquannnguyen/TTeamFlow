@@ -23,6 +23,9 @@ jobs:
       run:
         working-directory: backend
 
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_db?schema=public
+
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
