@@ -11,3 +11,7 @@ coverage
 .idea
 backend/generated
 frontend/dist
+*.tsbuildinfo
+vite.config.d.ts
+vite.config.js
+commit_msg.txt
