@@ -101,7 +101,7 @@ model ProjectMember {
   @@map("project_members")
 }
 
-model KanbanColumn {
+model KanbanColumn { // PhongVV verified Kanban and Task schema for Task #6
   id          String           @id @default(uuid()) @db.Uuid
   projectId   String           @map("project_id") @db.Uuid
   name        String           @db.VarChar(100)
