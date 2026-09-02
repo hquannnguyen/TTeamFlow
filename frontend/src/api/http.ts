@@ -1,33 +1,44 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../features/auth/store/auth.store';
 
-const baseURL = import.meta.env.VITE_API_URL ?? '/api/v1';
+export const baseURL = import.meta.env.VITE_API_URL ?? '/api/v1';
 
+/** Main axios instance — attaches Bearer token & handles 401 auto-refresh */
 export const http = axios.create({
   baseURL,
   withCredentials: true,
 });
 
+/**
+ * Bare axios instance used ONLY for auth endpoints (/auth/refresh, /auth/login, etc.)
+ * This intentionally bypasses the response interceptor to prevent refresh loops.
+ */
+export const authHttp = axios.create({
+  baseURL,
+  withCredentials: true,
+});
+
+// ── Request interceptor: attach access token ──────────────────────────────────
 http.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken;
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
+// ── Token refresh logic (singleton promise — prevents parallel refresh calls) ─
 let refreshPromise: Promise<string | null> | null = null;
 
-async function refreshAccessToken() {
+async function refreshAccessToken(): Promise<string | null> {
   if (!refreshPromise) {
-    refreshPromise = axios
-      .post(
-        `${baseURL}/auth/refresh`,
+    refreshPromise = authHttp
+      .post<{ success: true; data: { accessToken: string } }>(
+        '/auth/refresh',
         {},
-        { withCredentials: true },
       )
       .then((res) => {
-        const token = res.data?.data?.accessToken as string | undefined;
+        const token = res.data?.data?.accessToken;
         if (!token) return null;
-        useAuthStore.getState().setAccessToken(token);
+        useAuthStore.getState().setAuth(token, useAuthStore.getState().user);
         return token;
       })
       .catch(() => {
@@ -38,10 +49,10 @@ async function refreshAccessToken() {
         refreshPromise = null;
       });
   }
-
   return refreshPromise;
 }
 
+// ── Response interceptor: auto-refresh on 401 ────────────────────────────────
 http.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -49,7 +60,15 @@ http.interceptors.response.use(
       | (InternalAxiosRequestConfig & { _retry?: boolean })
       | undefined;
 
-    if (error.response?.status === 401 && original && !original._retry) {
+    // Never retry auth endpoints (prevents infinite loops)
+    const isAuthEndpoint = original?.url?.includes('/auth/');
+
+    if (
+      error.response?.status === 401 &&
+      original &&
+      !original._retry &&
+      !isAuthEndpoint
+    ) {
       original._retry = true;
       const token = await refreshAccessToken();
 
