@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   Post,
   Req,
   Res,
@@ -21,6 +22,7 @@ export class AuthController {
 
   @Public()
   @Post("register")
+  @HttpCode(201)
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
