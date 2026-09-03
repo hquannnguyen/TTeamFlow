@@ -5,6 +5,7 @@ import { RegisterPage } from '../../features/auth/pages/RegisterPage';
 import { ProjectBoardPage } from '../../features/kanban/pages/ProjectBoardPage';
 import { ProjectsPage } from '../../features/projects/pages/ProjectsPage';
 import { ProtectedRoute } from './ProtectedRoute';
+import { DashboardPage } from '../../features/dashboard/pages/DashboardPage';
 
 export const router = createBrowserRouter([
   {
@@ -21,11 +22,16 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { path: '/', element: <Navigate to="/projects" replace /> },
+          { path: '/', element: <Navigate to="/dashboard" replace /> },
+          { path: '/dashboard', element: <DashboardPage /> },
           { path: '/projects', element: <ProjectsPage /> },
           {
             path: '/projects/:projectId/board',
             element: <ProjectBoardPage />,
+          },
+          {
+            path: '/projects/:projectId/dashboard',
+            element: <DashboardPage />,
           },
         ],
       },
