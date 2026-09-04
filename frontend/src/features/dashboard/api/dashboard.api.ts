@@ -1,7 +1,8 @@
+import { http } from '../../../api/http';
 import { DashboardMetrics } from '../types/dashboard.types';
 
-// Dữ liệu giả lập chuẩn theo mẫu thiết kế
-const mockDashboardData: DashboardMetrics = {
+// Dữ liệu giả lập chuẩn làm fallback cho những phần Backend chưa xây hoặc khi xem demo
+export const mockDashboardData: DashboardMetrics = {
   totalTasks: 240,
   completedTasks: 120,
   overdueTasks: 3,
@@ -62,12 +63,60 @@ const mockDashboardData: DashboardMetrics = {
   ],
 };
 
-//Gia lap do tre mang 600ms
+const PALETTE = ['#94a3b8', '#d97706', '#10b981', '#6366f1', '#ec4899', '#06b6d4'];
+
+/**
+ * Lấy số liệu Dashboard:
+ * - Gọi API Backend thật: GET /api/v1/projects/:projectId/dashboard
+ * - Điền giá trị fallback/tính toán bổ trợ cho các trường UI nâng cao mà Backend chưa xây
+ */
 export async function getDashboardMetrics(projectId: string): Promise<DashboardMetrics> {
-  void projectId;
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(mockDashboardData);
-    }, 600);
-  });
+  if (!projectId || projectId === 'default') {
+    return mockDashboardData;
+  }
+
+  try {
+    const res = await http.get<{ success: true; data: DashboardMetrics }>(
+      `/projects/${projectId}/dashboard`,
+    );
+    const data = res.data.data;
+
+    const total = data.totalTasks ?? 0;
+    const completed = data.completedTasks ?? 0;
+    const active = Math.max(0, total - completed);
+
+    return {
+      ...data,
+      targetProgress: data.targetProgress ?? 80,
+      growthRate: data.growthRate ?? (total > 0 ? 12 : 0),
+      activeTasks: data.activeTasks ?? active,
+      statusDistribution: (data.statusDistribution || []).map((col, idx) => ({
+        ...col,
+        percentage:
+          total > 0 ? Math.round((col.count / total) * 100) : 0,
+        color:
+          col.color ||
+          (col.isCompleted
+            ? '#10b981'
+            : col.columnName.toLowerCase().includes('đang') ||
+              col.columnName.toLowerCase().includes('progress')
+            ? '#d97706'
+            : PALETTE[idx % PALETTE.length]),
+      })),
+      memberWorkload: (data.memberWorkload || []).map((m) => {
+        const count = m.activeTaskCount ?? 0;
+        return {
+          ...m,
+          totalTaskCount: m.totalTaskCount ?? Math.max(count, 1),
+          completedCount: m.completedCount ?? 0,
+          inProgressCount: m.inProgressCount ?? count,
+          todoCount: m.todoCount ?? 0,
+          isOverloaded: m.isOverloaded ?? count >= 10,
+        };
+      }),
+    };
+  } catch (error) {
+    console.warn('Backend dashboard call failed, fallback to mock data:', error);
+    return mockDashboardData;
+  }
 }

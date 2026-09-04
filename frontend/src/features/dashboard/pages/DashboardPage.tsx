@@ -1,26 +1,33 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { DashboardMetrics } from '../types/dashboard.types';
+import { useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { getDashboardMetrics } from '../api/dashboard.api';
 import { DashboardStats } from '../components/DashboardStats';
 import { DashboardCharts } from '../components/DashboardCharts';
+import { getProjects } from '../../projects/api/projects.api';
 
 export function DashboardPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState('30_days');
 
-  useEffect(() => {
-    setIsLoading(true);
-    getDashboardMetrics(projectId || 'default')
-      .then((data) => {
-        setMetrics(data);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, [projectId]);
+  // Lấy danh sách dự án của người dùng
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: getProjects,
+  });
+
+  // Chọn projectId: từ URL params hoặc dự án đầu tiên trong danh sách
+  const currentProjectId = projectId || (projects.length > 0 ? projects[0].id : '');
+
+  // Lấy metrics qua TanStack Query theo chuẩn convention ['dashboard', projectId]
+  const {
+    data: metrics,
+    isLoading,
+  } = useQuery({
+    queryKey: ['dashboard', currentProjectId],
+    queryFn: () => getDashboardMetrics(currentProjectId),
+  });
 
   if (isLoading) {
     return (
@@ -55,6 +62,29 @@ export function DashboardPage() {
         </div>
 
         <div className="dashboard-action-group">
+          {projects.length > 0 && (
+            <div className="date-filter-dropdown" style={{ minWidth: 160 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+              </svg>
+              <select
+                value={currentProjectId}
+                onChange={(e) => navigate(`/projects/${e.target.value}/dashboard`)}
+                className="date-select"
+                aria-label="Chọn dự án"
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <svg className="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          )}
+
           <div className="date-filter-dropdown">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />

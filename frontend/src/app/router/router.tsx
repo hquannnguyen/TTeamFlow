@@ -6,6 +6,7 @@ import { ProjectBoardPage } from '../../features/kanban/pages/ProjectBoardPage';
 import { ProjectsPage } from '../../features/projects/pages/ProjectsPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { DashboardPage } from '../../features/dashboard/pages/DashboardPage';
+import { ProfilePage } from '../../features/profile/pages/ProfilePage';
 
 export const router = createBrowserRouter([
   {
@@ -32,6 +33,10 @@ export const router = createBrowserRouter([
           {
             path: '/projects/:projectId/dashboard',
             element: <DashboardPage />,
+          },
+          {
+            path: '/profile',
+            element: <ProfilePage />,
           },
         ],
       },
