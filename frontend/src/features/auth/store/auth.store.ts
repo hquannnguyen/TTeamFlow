@@ -5,6 +5,7 @@ export interface AuthUser {
   fullName: string;
   email: string;
   systemRole: 'ADMIN' | 'USER';
+  avatarUrl?: string | null;
 }
 
 interface AuthState {

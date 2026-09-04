@@ -15,3 +15,10 @@ frontend/dist
 vite.config.d.ts
 vite.config.js
 commit_msg.txt
+
+# Uploads
+backend/uploads/**
+!backend/uploads/
+!backend/uploads/.gitkeep
+
+

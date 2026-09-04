@@ -3,6 +3,16 @@ import { useAuthStore } from '../features/auth/store/auth.store';
 
 export const baseURL = import.meta.env.VITE_API_URL ?? '/api/v1';
 
+/** Resolves media URLs (e.g. /uploads/avatars/...) to fully qualified URLs in dev or relative in prod */
+export function getMediaUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
+  }
+  const backendBase = baseURL.replace(/\/api\/v1\/?$/, '');
+  return `${backendBase}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
 /** Main axios instance — attaches Bearer token & handles 401 auto-refresh */
 export const http = axios.create({
   baseURL,

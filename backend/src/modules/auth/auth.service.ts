@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   UnauthorizedException,
@@ -10,6 +11,7 @@ import * as bcrypt from "bcrypt";
 import type { StringValue } from "ms";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 
 @Injectable()
 export class AuthService {
@@ -77,6 +79,7 @@ export class AuthService {
         fullName: user.fullName,
         email: user.email,
         systemRole: user.systemRole,
+        avatarUrl: user.avatarUrl,
       },
     };
   }
@@ -140,6 +143,44 @@ export class AuthService {
       data: { revokedAt: new Date() },
     });
     return { message: "Đăng xuất thành công" };
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException("Người dùng không tồn tại");
+
+    const ok = await bcrypt.compare(dto.currentPassword, user.passwordHash);
+    if (!ok) {
+      throw new BadRequestException("Mật khẩu hiện tại không chính xác");
+    }
+
+    const isSame = await bcrypt.compare(dto.newPassword, user.passwordHash);
+    if (isSame) {
+      throw new BadRequestException(
+        "Mật khẩu mới không được trùng với mật khẩu hiện tại",
+      );
+    }
+
+    const newHash = await bcrypt.hash(dto.newPassword, 10);
+
+    const now = new Date();
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          passwordHash: newHash,
+          passwordChangedAt: now,
+        },
+      }),
+      // Revoke all refresh tokens → buộc đăng nhập lại trên tất cả thiết bị
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: now },
+      }),
+    ]);
+
+    return { message: "Đổi mật khẩu thành công. Vui lòng đăng nhập lại." };
   }
 
   private async issueTokens(userId: string, email: string) {

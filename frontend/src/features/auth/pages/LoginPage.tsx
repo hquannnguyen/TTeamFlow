@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { login } from '../api/auth.api';
 import { useAuthStore } from '../store/auth.store';
@@ -45,10 +45,13 @@ function EyeOffIcon() {
 // ── Component ─────────────────────────────────────────────────────────────────
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const state = location.state as { successMessage?: string; email?: string } | null;
   const { setAuth } = useAuthStore();
 
   const [showPwd, setShowPwd] = useState(false);
   const [serverError, setServerError] = useState('');
+  const [successBanner, setSuccessBanner] = useState(state?.successMessage ?? '');
 
   const {
     register,
@@ -56,11 +59,12 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: state?.email ?? '', password: '' },
   });
 
   async function onSubmit(values: FormValues) {
     setServerError('');
+    setSuccessBanner('');
     try {
       const result = await login(values);
       setAuth(result.accessToken, result.user);
@@ -80,6 +84,16 @@ export function LoginPage() {
       subheading="Đăng nhập để tiếp tục với TTeamFlow"
     >
       <form className="form-stack" onSubmit={handleSubmit(onSubmit)} noValidate>
+
+        {/* Success banner (e.g. after changing password) */}
+        {successBanner && (
+          <div className="form-success-banner" role="status">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span>{successBanner}</span>
+          </div>
+        )}
 
         {/* Server error banner */}
         {serverError && (

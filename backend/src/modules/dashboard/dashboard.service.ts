@@ -43,6 +43,7 @@ export class DashboardService {
               select: {
                 id: true,
                 fullName: true,
+                avatarUrl: true,
                 _count: {
                   select: {
                     taskAssignments: {
@@ -78,7 +79,8 @@ export class DashboardService {
       })),
       memberWorkload: workloads.map(({ user }) => ({
         userId: user.id,
-        name: user.fullName,
+        fullName: user.fullName,
+        avatarUrl: user.avatarUrl,
         activeTaskCount: user._count.taskAssignments,
       })),
     };
