@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Patch,
   Post,
   Req,
   Res,
@@ -13,6 +14,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Public } from "../../common/decorators/public.decorator";
 import type { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { AuthService } from "./auth.service";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 
@@ -76,6 +78,18 @@ export class AuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.authService.logout(user.id);
+    response.clearCookie("refresh_token", { path: "/api/v1/auth" });
+    return result;
+  }
+
+  @Patch("change-password")
+  @HttpCode(200)
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.changePassword(user.id, dto);
     response.clearCookie("refresh_token", { path: "/api/v1/auth" });
     return result;
   }

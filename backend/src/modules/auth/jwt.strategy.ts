@@ -7,6 +7,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 interface JwtPayload {
   sub: string;
   email: string;
+  iat?: number;
 }
 
 @Injectable()
@@ -27,8 +28,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       select: {
         id: true,
         email: true,
+        fullName: true,
+        avatarUrl: true,
         systemRole: true,
         isActive: true,
+        passwordChangedAt: true,
       },
     });
 
@@ -38,9 +42,22 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       );
     }
 
+    if (user.passwordChangedAt && payload.iat) {
+      const changedTimestamp = Math.floor(
+        user.passwordChangedAt.getTime() / 1000,
+      );
+      if (payload.iat < changedTimestamp) {
+        throw new UnauthorizedException(
+          "Phiên làm việc đã hết hạn do đổi mật khẩu. Vui lòng đăng nhập lại",
+        );
+      }
+    }
+
     return {
       id: user.id,
       email: user.email,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl,
       systemRole: user.systemRole,
     };
   }
