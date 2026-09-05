@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { register as registerUser } from '../api/auth.api';
 import { AuthCard } from '../components/AuthCard';
+import { toast, getBackendErrorMessage } from '../../../components/ui/toast.store';
 
 // ── Password policy (mirrors backend RegisterDto exactly) ─────────────────────
 const passwordPolicy = z
@@ -99,16 +100,15 @@ export function RegisterPage() {
         email: values.email,
         password: values.password,
       });
+      toast.success('Đăng ký tài khoản thành công! Vui lòng đăng nhập.');
       navigate('/login', {
         replace: true,
-        state: { registered: true },
+        state: { registered: true, email: values.email },
       });
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setServerError(
-        typeof msg === 'string' ? msg : 'Đã xảy ra lỗi. Vui lòng thử lại.',
-      );
+      const msg = getBackendErrorMessage(err, 'Đã xảy ra lỗi. Vui lòng thử lại.');
+      setServerError(msg);
+      toast.error(msg);
     }
   }
 

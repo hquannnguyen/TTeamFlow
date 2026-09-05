@@ -5,6 +5,7 @@ import { getMediaUrl } from '../../api/http';
 import { logout as logoutApi } from '../../features/auth/api/auth.api';
 import { useAuthStore } from '../../features/auth/store/auth.store';
 import { ChangePasswordModal } from '../../features/profile/components/ChangePasswordModal';
+import { toast } from '../ui/toast.store';
 
 function getInitials(name?: string) {
   if (!name) return '?';
@@ -52,6 +53,7 @@ export function AppLayout() {
       // ignore
     } finally {
       logout();
+      toast.info('Đã đăng xuất khỏi hệ thống');
       navigate('/login', { replace: true });
     }
   }

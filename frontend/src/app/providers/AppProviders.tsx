@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode, useState } from 'react';
 import { useBootstrap } from '../../features/auth/hooks/useBootstrap';
+import { ToastContainer } from '../../components/ui/ToastContainer';
 
 function BootstrapGate({ children }: { children: ReactNode }) {
   useBootstrap();
@@ -22,7 +23,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BootstrapGate>{children}</BootstrapGate>
+      <BootstrapGate>
+        {children}
+        <ToastContainer />
+      </BootstrapGate>
     </QueryClientProvider>
   );
 }

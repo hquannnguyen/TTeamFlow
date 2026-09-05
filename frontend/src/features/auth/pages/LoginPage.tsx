@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { login } from '../api/auth.api';
 import { useAuthStore } from '../store/auth.store';
 import { AuthCard } from '../components/AuthCard';
+import { toast, getBackendErrorMessage } from '../../../components/ui/toast.store';
 
 // ── Validation schema ─────────────────────────────────────────────────────────
 const schema = z.object({
@@ -68,13 +69,12 @@ export function LoginPage() {
     try {
       const result = await login(values);
       setAuth(result.accessToken, result.user);
+      toast.success('Đăng nhập thành công!');
       navigate('/projects', { replace: true });
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setServerError(
-        typeof msg === 'string' ? msg : 'Email hoặc mật khẩu không chính xác',
-      );
+      const msg = getBackendErrorMessage(err, 'Email hoặc mật khẩu không chính xác');
+      setServerError(msg);
+      toast.error(msg);
     }
   }
 
