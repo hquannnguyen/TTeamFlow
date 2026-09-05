@@ -72,12 +72,15 @@ export class AuthController {
     return { accessToken: result.accessToken };
   }
 
+  @Public()
   @Post("logout")
   async logout(
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthUser | undefined,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.authService.logout(user.id);
+    const refreshToken = request.cookies?.refresh_token as string | undefined;
+    const result = await this.authService.logout(user?.id, refreshToken);
     response.clearCookie("refresh_token", { path: "/api/v1/auth" });
     return result;
   }

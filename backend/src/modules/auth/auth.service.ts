@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -51,13 +52,19 @@ export class AuthService {
     const email = dto.email.trim().toLowerCase();
     const user = await this.prisma.user.findUnique({ where: { email } });
 
-    if (!user || !user.isActive) {
+    if (!user) {
       throw new UnauthorizedException("Email hoặc mật khẩu không chính xác");
     }
 
     const ok = await bcrypt.compare(dto.password, user.passwordHash);
     if (!ok) {
       throw new UnauthorizedException("Email hoặc mật khẩu không chính xác");
+    }
+
+    if (!user.isActive) {
+      throw new ForbiddenException(
+        "Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.",
+      );
     }
 
     const tokens = await this.issueTokens(user.id, user.email);
@@ -94,6 +101,17 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException(
         "Refresh token không hợp lệ hoặc đã hết hạn",
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true, isActive: true },
+    });
+
+    if (!user || !user.isActive) {
+      throw new ForbiddenException(
+        "Tài khoản đã bị khóa hoặc không còn tồn tại",
       );
     }
 
@@ -137,11 +155,34 @@ export class AuthService {
     return tokens;
   }
 
-  async logout(userId: string) {
-    await this.prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+  async logout(userId?: string, refreshToken?: string) {
+    if (userId) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return { message: "Đăng xuất thành công" };
+    }
+
+    if (refreshToken) {
+      try {
+        const payload = await this.jwt.verifyAsync<{ sub: string }>(
+          refreshToken,
+          {
+            secret: this.config.getOrThrow<string>("JWT_REFRESH_SECRET"),
+          },
+        );
+        if (payload?.sub) {
+          await this.prisma.refreshToken.updateMany({
+            where: { userId: payload.sub, revokedAt: null },
+            data: { revokedAt: new Date() },
+          });
+        }
+      } catch {
+        // Token might already be invalid or expired; continue silently
+      }
+    }
+
     return { message: "Đăng xuất thành công" };
   }
 

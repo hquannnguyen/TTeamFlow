@@ -52,5 +52,5 @@ export async function getMe(): Promise<AuthUser> {
 
 /** POST /auth/logout — revokes refresh token server-side */
 export async function logout(): Promise<void> {
-  await http.post('/auth/logout');
+  await authHttp.post('/auth/logout');
 }
