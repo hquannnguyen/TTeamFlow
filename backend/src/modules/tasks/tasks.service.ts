@@ -6,10 +6,11 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { MoveTaskDto } from "./dto/move-task.dto";
+import { UpdateTaskDto } from "./dto/update-task.dto";
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async create(projectId: string, creatorId: string, dto: CreateTaskDto) {
     const column = await this.prisma.kanbanColumn.findFirst({
@@ -51,8 +52,8 @@ export class TasksService {
           completedAt: column.isCompleted ? new Date() : null,
           assignments: dto.assigneeIds?.length
             ? {
-                create: dto.assigneeIds.map((userId) => ({ userId })),
-              }
+              create: dto.assigneeIds.map((userId) => ({ userId })),
+            }
             : undefined,
         },
         include: {
@@ -133,5 +134,82 @@ export class TasksService {
     });
     if (!task) throw new NotFoundException("Task không tồn tại");
     return task.projectId;
+  }
+
+  async getDetail(taskId: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
+      include: {
+        column: true,
+        creator: { select: { id: true, fullName: true, avatarUrl: true } },
+        assignments: {
+          include: {
+            user: { select: { id: true, fullName: true, avatarUrl: true } },
+          },
+        },
+        checklistItems: { orderBy: { position: "asc" } },
+      },
+    });
+
+    if (!task) throw new NotFoundException("Task không tồn tại");
+    return task;
+  }
+
+  async update(taskId: string, actorId: string, dto: UpdateTaskDto) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
+    });
+    if (!task) throw new NotFoundException("Task không tồn tại");
+
+    return this.prisma.$transaction(async (tx) => {
+      const updatedTask = await tx.task.update({
+        where: { id: taskId },
+        data: {
+          title: dto.title?.trim(),
+          description: dto.description?.trim(),
+          priority: dto.priority,
+          startDate: dto.startDate !== undefined ? (dto.startDate ? new Date(dto.startDate) : null) : undefined,
+          dueDate: dto.dueDate !== undefined ? (dto.dueDate ? new Date(dto.dueDate) : null) : undefined,
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          projectId: task.projectId,
+          actorId,
+          action: "TASK_UPDATED",
+          entityType: "TASK",
+          entityId: task.id,
+        },
+      });
+
+      return updatedTask;
+    });
+  }
+
+  async remove(taskId: string, actorId: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id: taskId, deletedAt: null },
+    });
+    if (!task) throw new NotFoundException("Task không tồn tại");
+
+    return this.prisma.$transaction(async (tx) => {
+      const deletedTask = await tx.task.update({
+        where: { id: taskId },
+        data: { deletedAt: new Date() },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          projectId: task.projectId,
+          actorId,
+          action: "TASK_DELETED",
+          entityType: "TASK",
+          entityId: task.id,
+        },
+      });
+
+      return deletedTask;
+    });
   }
 }
