@@ -1,11 +1,25 @@
-import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateIf,
+} from "class-validator";
+import { Transform } from "class-transformer";
 
 export class UpdateChecklistItemDto {
-    @IsOptional()
-    @IsString()
-    content?: string;
+  @IsOptional()
+  @IsString({ message: "Nội dung phải là chuỗi" })
+  @ValidateIf((o) => o.content !== undefined)
+  @IsNotEmpty({ message: "Nội dung không được để trống" })
+  @MaxLength(500, { message: "Nội dung tối đa 500 ký tự" })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === "string" ? value.trim() : value,
+  )
+  content?: string;
 
-    @IsOptional()
-    @IsBoolean()
-    isCompleted?: boolean;
+  @IsOptional()
+  @IsBoolean({ message: "Trạng thái hoàn thành phải là boolean" })
+  isCompleted?: boolean;
 }

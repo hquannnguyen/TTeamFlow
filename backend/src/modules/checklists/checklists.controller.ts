@@ -1,40 +1,60 @@
-import { Controller, Post, Body, Param, Patch, Delete, UseGuards } from '@nestjs/common';
-import { ChecklistsService } from './checklists.service';
-import { CreateChecklistItemDto } from './dto/create-checklist-item.dto';
-import { UpdateChecklistItemDto } from './dto/update-checklist-item.dto';
-import { ProjectRole } from '@prisma/client';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from "@nestjs/common";
+import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import type { AuthUser } from "../../common/interfaces/auth-user.interface";
+import { ChecklistsService } from "./checklists.service";
+import { CreateChecklistItemDto } from "./dto/create-checklist-item.dto";
+import { UpdateChecklistItemDto } from "./dto/update-checklist-item.dto";
 
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { ProjectRoleGuard } from '../../common/guards/project-role.guard';
-import { ProjectRoles } from '../../common/decorators/project-roles.decorator';
-
-@Controller('projects/:projectId/tasks/:taskId/checklists') // Cấu trúc Nested Route RESTful
-@UseGuards(JwtAuthGuard, ProjectRoleGuard)
+@Controller()
 export class ChecklistsController {
-    constructor(private readonly checklistsService: ChecklistsService) { }
+  constructor(private readonly checklistsService: ChecklistsService) {}
 
-    // Chỉ Owner, Manager, Member mới được tạo checklist
-    @ProjectRoles(ProjectRole.OWNER, ProjectRole.MANAGER, ProjectRole.MEMBER)
-    @Post()
-    create(
-        @Param('taskId') taskId: string,
-        @Body() createChecklistItemDto: CreateChecklistItemDto,
-    ) {
-        return this.checklistsService.create(taskId, createChecklistItemDto);
-    }
+  @Get([
+    "tasks/:taskId/checklists",
+    "projects/:projectId/tasks/:taskId/checklists",
+  ])
+  findAll(@Param("taskId") taskId: string, @CurrentUser() user: AuthUser) {
+    return this.checklistsService.findAll(taskId, user.id);
+  }
 
-    @ProjectRoles(ProjectRole.OWNER, ProjectRole.MANAGER, ProjectRole.MEMBER)
-    @Patch(':id')
-    update(
-        @Param('id') id: string,
-        @Body() updateChecklistItemDto: UpdateChecklistItemDto,
-    ) {
-        return this.checklistsService.update(id, updateChecklistItemDto);
-    }
+  @Post([
+    "tasks/:taskId/checklists",
+    "projects/:projectId/tasks/:taskId/checklists",
+  ])
+  create(
+    @Param("taskId") taskId: string,
+    @CurrentUser() user: AuthUser,
+    @Body() createChecklistItemDto: CreateChecklistItemDto,
+  ) {
+    return this.checklistsService.create(
+      taskId,
+      user.id,
+      createChecklistItemDto,
+    );
+  }
 
-    @ProjectRoles(ProjectRole.OWNER, ProjectRole.MANAGER, ProjectRole.MEMBER)
-    @Delete(':id')
-    remove(@Param('id') id: string) {
-        return this.checklistsService.remove(id);
-    }
+  @Patch(["checklists/:id", "projects/:projectId/tasks/:taskId/checklists/:id"])
+  update(
+    @Param("id") id: string,
+    @CurrentUser() user: AuthUser,
+    @Body() updateChecklistItemDto: UpdateChecklistItemDto,
+  ) {
+    return this.checklistsService.update(id, user.id, updateChecklistItemDto);
+  }
+
+  @Delete([
+    "checklists/:id",
+    "projects/:projectId/tasks/:taskId/checklists/:id",
+  ])
+  remove(@Param("id") id: string, @CurrentUser() user: AuthUser) {
+    return this.checklistsService.remove(id, user.id);
+  }
 }
