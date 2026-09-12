@@ -4,14 +4,12 @@ import {
   IsOptional,
   IsString,
   MaxLength,
-  ValidateIf,
 } from "class-validator";
 import { Transform } from "class-transformer";
 
 export class UpdateChecklistItemDto {
   @IsOptional()
   @IsString({ message: "Nội dung phải là chuỗi" })
-  @ValidateIf((o) => o.content !== undefined)
   @IsNotEmpty({ message: "Nội dung không được để trống" })
   @MaxLength(500, { message: "Nội dung tối đa 500 ký tự" })
   @Transform(({ value }: { value: unknown }) =>
