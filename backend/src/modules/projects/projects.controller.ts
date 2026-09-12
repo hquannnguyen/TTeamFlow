@@ -1,5 +1,7 @@
 import { Body, Controller, Get, Param, Post } from "@nestjs/common";
+import { ProjectRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { ProjectRoles } from "../../common/decorators/project-roles.decorator";
 import type { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { CreateProjectDto } from "./dto/create-project.dto";
 import { ProjectsService } from "./projects.service";
@@ -18,6 +20,12 @@ export class ProjectsController {
     return this.projectsService.create(user.id, dto);
   }
 
+  @ProjectRoles(
+    ProjectRole.OWNER,
+    ProjectRole.MANAGER,
+    ProjectRole.MEMBER,
+    ProjectRole.VIEWER,
+  )
   @Get(":projectId")
   findOne(
     @Param("projectId") projectId: string,
