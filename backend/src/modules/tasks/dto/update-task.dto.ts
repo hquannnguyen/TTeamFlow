@@ -11,14 +11,15 @@ import {
   MaxLength,
 } from "class-validator";
 
-export class CreateTaskDto {
-  @IsNotEmpty({ message: "Tiêu đề không được để trống" })
+export class UpdateTaskDto {
+  @IsOptional()
   @IsString({ message: "Tiêu đề phải là chuỗi" })
+  @IsNotEmpty({ message: "Tiêu đề không được để trống" })
   @MaxLength(250, { message: "Tiêu đề tối đa 250 ký tự" })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === "string" ? value.trim() : value,
   )
-  title: string;
+  title?: string;
 
   @IsOptional()
   @IsString()
@@ -27,10 +28,6 @@ export class CreateTaskDto {
     typeof value === "string" ? value.trim() : value,
   )
   description?: string;
-
-  @IsNotEmpty({ message: "Cột không được để trống" })
-  @IsString()
-  columnId: string;
 
   @IsOptional()
   @IsEnum(TaskPriority, { message: "Độ ưu tiên không hợp lệ" })
