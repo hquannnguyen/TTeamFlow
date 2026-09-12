@@ -23,7 +23,7 @@ export class TasksController {
   constructor(
     private readonly service: TasksService,
     private readonly prisma: PrismaService,
-  ) { }
+  ) {}
 
   @ProjectRoles(ProjectRole.OWNER, ProjectRole.MANAGER, ProjectRole.MEMBER)
   @Post("projects/:projectId/tasks")
@@ -53,11 +53,10 @@ export class TasksController {
   }
 
   @Get("tasks/:taskId")
-  getDetail(@Param("taskId") taskId: string) {
-    return this.service.getDetail(taskId);
+  getDetail(@Param("taskId") taskId: string, @CurrentUser() user: AuthUser) {
+    return this.service.getDetail(taskId, user.id);
   }
 
-  @ProjectRoles(ProjectRole.OWNER, ProjectRole.MANAGER, ProjectRole.MEMBER)
   @Patch("tasks/:taskId")
   update(
     @Param("taskId") taskId: string,
@@ -67,12 +66,26 @@ export class TasksController {
     return this.service.update(taskId, user.id, dto);
   }
 
-  @ProjectRoles(ProjectRole.OWNER, ProjectRole.MANAGER)
   @Delete("tasks/:taskId")
-  remove(
+  remove(@Param("taskId") taskId: string, @CurrentUser() user: AuthUser) {
+    return this.service.remove(taskId, user.id);
+  }
+
+  @Post("tasks/:taskId/assignees/:userId")
+  assign(
     @Param("taskId") taskId: string,
+    @Param("userId") targetUserId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.remove(taskId, user.id);
+    return this.service.assign(taskId, user.id, targetUserId);
+  }
+
+  @Delete("tasks/:taskId/assignees/:userId")
+  unassign(
+    @Param("taskId") taskId: string,
+    @Param("userId") targetUserId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.service.unassign(taskId, user.id, targetUserId);
   }
 }
