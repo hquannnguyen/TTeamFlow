@@ -66,7 +66,12 @@ export class ProjectsController {
     @CurrentUser() user: AuthUser,
     @Body() dto: UpdateProjectDto,
   ) {
-    return this.projectsService.update(projectId, user.id, dto, user.systemRole);
+    return this.projectsService.update(
+      projectId,
+      user.id,
+      dto,
+      user.systemRole,
+    );
   }
 
   @ProjectRoles(ProjectRole.OWNER, ProjectRole.MANAGER)
