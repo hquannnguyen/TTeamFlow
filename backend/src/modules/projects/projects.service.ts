@@ -28,9 +28,7 @@ export class ProjectsService {
   ) {
     const isAdmin = systemRole === SystemRole.ADMIN;
     const memberFilter =
-      !isAdmin || scope === "my"
-        ? { members: { some: { userId } } }
-        : {};
+      !isAdmin || scope === "my" ? { members: { some: { userId } } } : {};
 
     const projects = await this.prisma.project.findMany({
       where: {
@@ -87,7 +85,8 @@ export class ProjectsService {
       const completedTasks = p.tasks?.length ?? 0;
       const progress =
         totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      const { tasks, ...rest } = p;
+      const { ...rest } = p;
+      delete (rest as Record<string, unknown>).tasks;
       return {
         ...rest,
         taskStats: {
@@ -159,7 +158,8 @@ export class ProjectsService {
     const completedTasks = project.tasks?.length ?? 0;
     const progress =
       totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    const { tasks, ...rest } = project;
+    const { ...rest } = project;
+    delete (rest as Record<string, unknown>).tasks;
 
     return {
       ...rest,
@@ -260,7 +260,8 @@ export class ProjectsService {
     if (
       !isAdmin &&
       (!member ||
-        (member.role !== ProjectRole.OWNER && member.role !== ProjectRole.MANAGER))
+        (member.role !== ProjectRole.OWNER &&
+          member.role !== ProjectRole.MANAGER))
     ) {
       throw new ForbiddenException("Bạn không có quyền cập nhật dự án");
     }
@@ -346,7 +347,8 @@ export class ProjectsService {
     if (
       !isAdmin &&
       (!member ||
-        (member.role !== ProjectRole.OWNER && member.role !== ProjectRole.MANAGER))
+        (member.role !== ProjectRole.OWNER &&
+          member.role !== ProjectRole.MANAGER))
     ) {
       throw new ForbiddenException("Bạn không có quyền lưu trữ dự án");
     }
@@ -388,7 +390,8 @@ export class ProjectsService {
     if (
       !isAdmin &&
       (!member ||
-        (member.role !== ProjectRole.OWNER && member.role !== ProjectRole.MANAGER))
+        (member.role !== ProjectRole.OWNER &&
+          member.role !== ProjectRole.MANAGER))
     ) {
       throw new ForbiddenException("Bạn không có quyền khôi phục dự án");
     }
@@ -428,7 +431,9 @@ export class ProjectsService {
       where: { projectId_userId: { projectId, userId: actorId } },
     });
     if (!isAdmin && (!member || member.role !== ProjectRole.OWNER)) {
-      throw new ForbiddenException("Chỉ OWNER hoặc ADMIN mới có quyền xóa dự án");
+      throw new ForbiddenException(
+        "Chỉ OWNER hoặc ADMIN mới có quyền xóa dự án",
+      );
     }
 
     return this.prisma.$transaction(async (tx) => {

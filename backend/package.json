@@ -17,7 +17,8 @@
     "test:rbac": "tsx test/guards.spec.ts",
     "test:kanban": "tsx test/kanban-reorder.spec.ts",
     "test:activity-logs": "tsx test/activity-logs.spec.ts",
-    "test:all": "tsx test/guards.spec.ts && tsx test/kanban-reorder.spec.ts && tsx test/activity-logs.spec.ts"
+    "test:members": "tsx test/members.spec.ts",
+    "test:all": "tsx test/guards.spec.ts && tsx test/kanban-reorder.spec.ts && tsx test/activity-logs.spec.ts && tsx test/members.spec.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
