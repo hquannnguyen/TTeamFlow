@@ -100,6 +100,16 @@ export class TasksService {
     });
     if (!task) throw new NotFoundException("Task không tồn tại");
 
+    const member = await this.prisma.projectMember.findUnique({
+      where: {
+        projectId_userId: { projectId: task.projectId, userId: actorId },
+      },
+    });
+
+    if (!member || member.role === ProjectRole.VIEWER) {
+      throw new ForbiddenException("Bạn không có quyền di chuyển task");
+    }
+
     const target = await this.prisma.kanbanColumn.findFirst({
       where: {
         id: dto.targetColumnId,

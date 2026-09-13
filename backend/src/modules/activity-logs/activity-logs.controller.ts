@@ -7,7 +7,12 @@ import { ActivityLogsService } from "./activity-logs.service";
 export class ActivityLogsController {
   constructor(private readonly service: ActivityLogsService) {}
 
-  @ProjectRoles(ProjectRole.OWNER, ProjectRole.MANAGER)
+  @ProjectRoles(
+    ProjectRole.OWNER,
+    ProjectRole.MANAGER,
+    ProjectRole.MEMBER,
+    ProjectRole.VIEWER,
+  )
   @Get()
   list(@Param("projectId") projectId: string) {
     return this.service.list(projectId);

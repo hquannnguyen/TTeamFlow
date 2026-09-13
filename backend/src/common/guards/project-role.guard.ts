@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { ProjectRole } from "@prisma/client";
@@ -32,6 +33,10 @@ export class ProjectRoleGuard implements CanActivate {
         Request & { user: AuthUser; params: Record<string, string> }
       >();
 
+    if (!request.user) {
+      throw new UnauthorizedException("Vui lòng đăng nhập");
+    }
+
     const projectId = request.params.projectId ?? request.params.id;
 
     if (!projectId) {
@@ -47,9 +52,18 @@ export class ProjectRoleGuard implements CanActivate {
           userId: request.user.id,
         },
       },
+      include: {
+        project: {
+          select: { deletedAt: true },
+        },
+      },
     });
 
-    if (!membership || !requiredRoles.includes(membership.role)) {
+    if (
+      !membership ||
+      membership.project?.deletedAt ||
+      !requiredRoles.includes(membership.role)
+    ) {
       throw new ForbiddenException("Bạn không có quyền trong dự án này");
     }
 
