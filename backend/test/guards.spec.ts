@@ -101,6 +101,9 @@ async function runTests() {
     projectMember: {
       findUnique: () => Promise.resolve(mockMembership),
     },
+    project: {
+      findUnique: () => Promise.resolve({ deletedAt: null }),
+    },
   } as unknown as PrismaService;
 
   const projectGuard = new ProjectRoleGuard(reflector, mockPrisma);
@@ -220,8 +223,24 @@ async function runTests() {
     "✅ TC-P8: Nhận diện linh hoạt params.projectId hoặc params.id -> Cho phép đi qua (true)",
   );
 
+  // TC-P9: SystemRole ADMIN có quyền truy cập toàn hệ thống (kể cả không nằm trong membership)
+  mockMembership = null; // Không có membership trong project
+  assert.strictEqual(
+    await projectGuard.canActivate(
+      createMockContext(
+        { id: "admin-user", systemRole: SystemRole.ADMIN },
+        { projectId: "p-other-user" },
+      ),
+    ),
+    true,
+    "TC-P9 Failed: ADMIN phải truy cập được dự án của người khác",
+  );
   console.log(
-    "\n🎉 TOÀN BỘ 12/12 TEST CASES KIỂM THỬ RBAC GUARDS ĐÃ PASS THÀNH CÔNG 100%!",
+    "✅ TC-P9: SystemRole ADMIN truy cập dự án của người khác -> Cho phép đi qua (true)",
+  );
+
+  console.log(
+    "\n🎉 TOÀN BỘ 13/13 TEST CASES KIỂM THỬ RBAC GUARDS ĐÃ PASS THÀNH CÔNG 100%!",
   );
 }
 

@@ -45,6 +45,18 @@ export class ProjectRoleGuard implements CanActivate {
       );
     }
 
+    // SystemRole ADMIN có toàn quyền quản trị trên mọi dự án (chỉ chặn nếu dự án đã bị xóa mềm)
+    if (request.user.systemRole === "ADMIN") {
+      const project = await this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { deletedAt: true },
+      });
+      if (!project || project.deletedAt) {
+        throw new ForbiddenException("Bạn không có quyền trong dự án này");
+      }
+      return true;
+    }
+
     const membership = await this.prisma.projectMember.findUnique({
       where: {
         projectId_userId: {
