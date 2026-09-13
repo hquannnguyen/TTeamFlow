@@ -6,20 +6,37 @@ import {
 } from "@nestjs/common";
 import { Observable, map } from "rxjs";
 
+export interface StandardSuccessResponse<T> {
+  success: true;
+  data: T;
+  meta?: unknown;
+}
+
 @Injectable()
 export class ResponseInterceptor<T> implements NestInterceptor<
   T,
-  { success: true; data: T }
+  StandardSuccessResponse<unknown>
 > {
   intercept(
     _context: ExecutionContext,
     next: CallHandler<T>,
-  ): Observable<{ success: true; data: T }> {
+  ): Observable<StandardSuccessResponse<unknown>> {
     return next.handle().pipe(
-      map((data) => ({
-        success: true as const,
-        data,
-      })),
+      map((res: unknown) => {
+        if (res && typeof res === "object" && "data" in res && "meta" in res) {
+          const paginated = res;
+          return {
+            success: true as const,
+            data: paginated.data,
+            meta: paginated.meta,
+          };
+        }
+
+        return {
+          success: true as const,
+          data: res,
+        };
+      }),
     );
   }
 }

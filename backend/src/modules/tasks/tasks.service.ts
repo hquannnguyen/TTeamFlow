@@ -364,11 +364,28 @@ export class TasksService {
       throw new BadRequestException("Thành viên đã được gán vào task này");
     }
 
-    return this.prisma.taskAssignment.create({
-      data: { taskId, userId: targetUserId },
-      include: {
-        user: { select: { id: true, fullName: true, avatarUrl: true } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const assignment = await tx.taskAssignment.create({
+        data: { taskId, userId: targetUserId },
+        include: {
+          user: { select: { id: true, fullName: true, avatarUrl: true } },
+        },
+      });
+
+      await tx.activityLog.create({
+        data: {
+          projectId: task.projectId,
+          actorId,
+          action: "TASK_ASSIGNED",
+          entityType: "TASK",
+          entityId: task.id,
+          metadata: {
+            assignedUserId: targetUserId,
+          },
+        },
+      });
+
+      return assignment;
     });
   }
 
@@ -396,10 +413,25 @@ export class TasksService {
       throw new NotFoundException("Thành viên chưa được gán vào task này");
     }
 
-    await this.prisma.taskAssignment.delete({
-      where: { taskId_userId: { taskId, userId: targetUserId } },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.taskAssignment.delete({
+        where: { taskId_userId: { taskId, userId: targetUserId } },
+      });
 
-    return { success: true };
+      await tx.activityLog.create({
+        data: {
+          projectId: task.projectId,
+          actorId,
+          action: "TASK_UNASSIGNED",
+          entityType: "TASK",
+          entityId: task.id,
+          metadata: {
+            unassignedUserId: targetUserId,
+          },
+        },
+      });
+
+      return { success: true };
+    });
   }
 }
