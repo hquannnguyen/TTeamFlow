@@ -9,7 +9,7 @@ import { KanbanService } from "./kanban.service";
 @UseGuards(JwtAuthGuard, ProjectRoleGuard) // BẮT BUỘC: Bảo vệ endpoint bằng RBAC 2 tầng
 export class KanbanController {
   // Đổi tên biến thành kanbanService cho rõ ràng
-  constructor(private readonly kanbanService: KanbanService) { }
+  constructor(private readonly kanbanService: KanbanService) {}
 
   @ProjectRoles(
     ProjectRole.OWNER,
@@ -18,7 +18,8 @@ export class KanbanController {
     ProjectRole.VIEWER,
   )
   @Get()
-  getKanbanBoard(@Param("projectId") projectId: string) { // Đổi tên hàm thành getKanbanBoard
+  getKanbanBoard(@Param("projectId") projectId: string) {
+    // Đổi tên hàm thành getKanbanBoard
     return this.kanbanService.getKanbanBoard(projectId);
   }
 }
