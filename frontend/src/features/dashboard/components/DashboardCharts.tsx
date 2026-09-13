@@ -1,4 +1,5 @@
 import { DashboardMetrics } from '../types/dashboard.types';
+import { getMediaUrl } from '../../../api/http';
 
 interface DashboardChartsProps {
   metrics: DashboardMetrics;
@@ -196,11 +197,14 @@ export function DashboardCharts({ metrics }: DashboardChartsProps) {
             return (
               <div className="workload-row" key={member.userId}>
                 <div className="workload-member-info">
-                  {member.avatarUrl ? (
+                  {getMediaUrl(member.avatarUrl) ? (
                     <img
-                      src={member.avatarUrl}
+                      src={getMediaUrl(member.avatarUrl)!}
                       alt={member.fullName}
                       className="workload-avatar"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
                     />
                   ) : (
                     <div className="workload-avatar-initials">
