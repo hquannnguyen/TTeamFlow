@@ -14,7 +14,7 @@ export function DashboardPage() {
   // Lấy danh sách dự án của người dùng
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
-    queryFn: getProjects,
+    queryFn: () => getProjects(),
   });
 
   // Chọn projectId: từ URL params hoặc dự án đầu tiên trong danh sách
