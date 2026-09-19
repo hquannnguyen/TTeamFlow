@@ -14,7 +14,7 @@ export function ProjectBoardPage() {
   const queryClient = useQueryClient();
 
   // 1. Fetch user's projects to allow quick switching
-  const { data: projects = [] } = useQuery({
+  const { data: projects = [], isLoading: isLoadingProjects } = useQuery({
     queryKey: ['projects'],
     queryFn: () => getProjects(),
   });
@@ -161,12 +161,77 @@ export function ProjectBoardPage() {
     });
   }, [columns, searchQuery, selectedAssignee, selectedPriority, onlyOverdue]);
 
-
-  if (isLoading) {
+  if (isLoadingProjects || (Boolean(currentProjectId) && isLoading)) {
     return (
-      <div className="kanban-page-container" style={{ padding: '40px', textAlign: 'center' }}>
+      <div className="kanban-page-container" style={{ padding: '60px 20px', textAlign: 'center' }}>
         <div className="spinner-ring" style={{ margin: '0 auto 16px' }} />
         <p style={{ color: '#64748b', fontSize: '14px' }}>Đang tải bảng Kanban...</p>
+      </div>
+    );
+  }
+
+  if (!currentProjectId && projects.length === 0) {
+    return (
+      <div className="kanban-page-container" style={{ padding: '60px 20px', textAlign: 'center' }}>
+        <div
+          style={{
+            maxWidth: '480px',
+            margin: '40px auto',
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '40px 24px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+          }}
+        >
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: '#eef2ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px',
+              color: '#4f46e5',
+            }}
+          >
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M9 3v18" />
+              <path d="M15 3v18" />
+            </svg>
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+            Chưa có dự án nào
+          </h2>
+          <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.6', marginBottom: '24px' }}>
+            Bạn cần có ít nhất 1 dự án để quản lý công việc và xem bảng Kanban. Vui lòng tạo dự án mới để bắt đầu.
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => navigate('/projects')}
+            style={{
+              padding: '10px 24px',
+              borderRadius: '8px',
+              fontWeight: '600',
+              fontSize: '14px',
+            }}
+          >
+            + Tạo dự án mới
+          </button>
+        </div>
       </div>
     );
   }
