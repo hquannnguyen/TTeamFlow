@@ -8,6 +8,8 @@ import { ProtectedRoute } from './ProtectedRoute';
 import { DashboardPage } from '../../features/dashboard/pages/DashboardPage';
 import { ProfilePage } from '../../features/profile/pages/ProfilePage';
 
+import { TaskDetailPage } from '../../features/kanban/pages/TaskDetailPage';
+
 export const router = createBrowserRouter([
   {
     path: '/login',
@@ -33,6 +35,14 @@ export const router = createBrowserRouter([
           {
             path: '/projects/:projectId/board',
             element: <ProjectBoardPage />,
+          },
+          {
+            path: '/projects/:projectId/tasks/:taskId',
+            element: <TaskDetailPage />,
+          },
+          {
+            path: '/tasks/:taskId',
+            element: <TaskDetailPage />,
           },
           {
             path: '/projects/:projectId/dashboard',

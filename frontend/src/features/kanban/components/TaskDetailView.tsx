@@ -173,8 +173,8 @@ export function TaskDetailView({
   });
 
   const updateChecklistMutation = useMutation({
-    mutationFn: ({ id, isDone }: { id: string; isDone: boolean }) =>
-      updateChecklistItem(id, { isDone }),
+    mutationFn: ({ id, isCompleted }: { id: string; isCompleted: boolean }) =>
+      updateChecklistItem(id, { isCompleted }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['checklists', taskId] });
       queryClient.invalidateQueries({ queryKey: ['kanban', projectId] });
@@ -391,25 +391,33 @@ export function TaskDetailView({
                 ) : (
                   <div className="task-checklists-box">
                     <div className="checklists-list">
-                      {checklists.map((item) => (
-                        <div key={item.id} className="checklist-item-row">
-                          <input
-                            type="checkbox"
-                            checked={item.isDone}
-                            onChange={(e) =>
-                              updateChecklistMutation.mutate({ id: item.id, isDone: e.target.checked })
-                            }
-                          />
-                          <span className={`checklist-text ${item.isDone ? 'done' : ''}`}>{item.content}</span>
-                          <button
-                            type="button"
-                            className="checklist-del-btn"
-                            onClick={() => deleteChecklistMutation.mutate(item.id)}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                      {checklists.map((item) => {
+                        const isChecked = Boolean(item.isCompleted ?? item.isDone);
+                        return (
+                          <div key={item.id} className="checklist-item-row">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) =>
+                                updateChecklistMutation.mutate({
+                                  id: item.id,
+                                  isCompleted: e.target.checked,
+                                })
+                              }
+                            />
+                            <span className={`checklist-text ${isChecked ? 'done' : ''}`}>
+                              {item.content}
+                            </span>
+                            <button
+                              type="button"
+                              className="checklist-del-btn"
+                              onClick={() => deleteChecklistMutation.mutate(item.id)}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <form

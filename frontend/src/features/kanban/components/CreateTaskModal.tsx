@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createTask, type KanbanColumn, type KanbanTask } from '../api/kanban.api';
 import { toast } from '../../../components/ui/toast.store';
+import { MemberAutocomplete } from './MemberAutocomplete';
 
 interface CreateTaskModalProps {
   projectId: string;
@@ -108,26 +109,13 @@ export function CreateTaskModal({
             <label className="form-label" style={{ fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
               Người được phân công
             </label>
-            <select
-              className="form-select"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '14px',
-                background: '#ffffff',
-              }}
-              value={assigneeId}
-              onChange={(e) => setAssigneeId(e.target.value)}
-            >
-              <option value="">-- Chọn thành viên (Chưa phân công) --</option>
-              {members.map((m) => (
-                <option key={m.user.id} value={m.user.id}>
-                  {m.user.fullName}
-                </option>
-              ))}
-            </select>
+            <MemberAutocomplete
+              members={members}
+              selectedUserId={assigneeId}
+              onSelect={(user) => setAssigneeId(user.id)}
+              onClear={() => setAssigneeId('')}
+              placeholder="Nhập tên người được giao..."
+            />
           </div>
 
           <div className="modal-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
