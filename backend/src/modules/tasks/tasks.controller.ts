@@ -30,13 +30,15 @@ export class TasksController {
     return this.service.create(projectId, user.id, dto);
   }
 
-  @Patch("tasks/:taskId/move")
+  @Patch(["tasks/:taskId/move", "tasks/:id/move"])
   move(
-    @Param("taskId") taskId: string,
+    @Param("taskId") taskId: string | undefined,
+    @Param("id") id: string | undefined,
     @CurrentUser() user: AuthUser,
     @Body() dto: MoveTaskDto,
   ) {
-    return this.service.move(taskId, user.id, dto);
+    const targetTaskId = taskId ?? id;
+    return this.service.move(targetTaskId!, user.id, dto);
   }
 
   @Get("tasks/:taskId")
