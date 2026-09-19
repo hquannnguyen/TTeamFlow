@@ -21,4 +21,6 @@ backend/uploads/**
 !backend/uploads/
 !backend/uploads/.gitkeep
 
-
+# MCP Config & Secrets
+mcp_config.json
+.agents/mcp_config.json
