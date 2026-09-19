@@ -1,11 +1,12 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { DashboardMetricsResponse } from "./interfaces/dashboard-metrics.interface";
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async metrics(projectId: string) {
+  async metrics(projectId: string): Promise<DashboardMetricsResponse> {
     const [totalTasks, completedTasks, overdueTasks, columns, workloads] =
       await Promise.all([
         this.prisma.task.count({
@@ -77,12 +78,14 @@ export class DashboardService {
         isCompleted: column.isCompleted,
         count: column._count.tasks,
       })),
-      memberWorkload: workloads.map(({ user }) => ({
-        userId: user.id,
-        fullName: user.fullName,
-        avatarUrl: user.avatarUrl,
-        activeTaskCount: user._count.taskAssignments,
-      })),
+      memberWorkload: workloads
+        .map(({ user }) => ({
+          userId: user.id,
+          fullName: user.fullName,
+          avatarUrl: user.avatarUrl,
+          activeTaskCount: user._count.taskAssignments,
+        }))
+        .sort((a, b) => b.activeTaskCount - a.activeTaskCount),
     };
   }
 }

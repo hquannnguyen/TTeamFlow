@@ -12,7 +12,12 @@ export function DashboardPage() {
   const [timeRange, setTimeRange] = useState('30_days');
 
   // Lấy danh sách dự án của người dùng
-  const { data: projects = [] } = useQuery({
+  const {
+    data: projects = [],
+    isLoading: isLoadingProjects,
+    isError: isErrorProjects,
+    refetch: refetchProjects,
+  } = useQuery({
     queryKey: ['projects'],
     queryFn: () => getProjects(),
   });
@@ -23,13 +28,18 @@ export function DashboardPage() {
   // Lấy metrics qua TanStack Query theo chuẩn convention ['dashboard', projectId]
   const {
     data: metrics,
-    isLoading,
+    isLoading: isLoadingMetrics,
+    isError: isErrorMetrics,
+    error: metricsError,
+    refetch: refetchMetrics,
   } = useQuery({
     queryKey: ['dashboard', currentProjectId],
     queryFn: () => getDashboardMetrics(currentProjectId),
+    enabled: Boolean(currentProjectId),
   });
 
-  if (isLoading) {
+  // 1. Loading State
+  if (isLoadingProjects || (Boolean(currentProjectId) && isLoadingMetrics)) {
     return (
       <div className="dashboard-loading-state">
         <div className="spinner-ring" />
@@ -38,12 +48,60 @@ export function DashboardPage() {
     );
   }
 
-  if (!metrics) {
+  // 2. Empty State: Người dùng chưa có dự án nào
+  if (!isLoadingProjects && projects.length === 0) {
     return (
-      <div className="dashboard-error-state">
-        <p>Không có dữ liệu phân tích.</p>
+      <div className="dashboard-error-state" style={{ minHeight: '60vh', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '8px' }}>📂</div>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--gray-800, #1e293b)' }}>
+          Chưa có dự án nào
+        </h2>
+        <p style={{ maxWidth: '420px', color: 'var(--gray-500, #64748b)', fontSize: '14px', lineHeight: 1.5 }}>
+          Bạn chưa tham gia hoặc tạo dự án nào. Hãy tạo hoặc tham gia dự án để bắt đầu xem phân tích số liệu.
+        </p>
+        <button
+          className="btn-retry"
+          onClick={() => navigate('/projects')}
+          style={{ marginTop: '12px' }}
+        >
+          Đến danh sách dự án
+        </button>
       </div>
     );
+  }
+
+  // 3. Error State: Lỗi khi tải dữ liệu dự án hoặc metrics
+  if (isErrorProjects || isErrorMetrics || (!metrics && Boolean(currentProjectId))) {
+    const errorMsg =
+      metricsError instanceof Error
+        ? metricsError.message
+        : 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại kết nối mạng.';
+
+    return (
+      <div className="dashboard-error-state" style={{ minHeight: '60vh', textAlign: 'center' }}>
+        <div style={{ fontSize: '44px', marginBottom: '8px' }}>⚠️</div>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--gray-800, #1e293b)' }}>
+          Không thể tải dữ liệu phân tích
+        </h2>
+        <p style={{ maxWidth: '460px', color: 'var(--gray-500, #64748b)', fontSize: '14px', lineHeight: 1.5 }}>
+          {errorMsg}
+        </p>
+        <button
+          className="btn-retry"
+          onClick={() => {
+            if (isErrorProjects) refetchProjects();
+            if (isErrorMetrics) refetchMetrics();
+          }}
+          style={{ marginTop: '12px' }}
+        >
+          Thử lại
+        </button>
+      </div>
+    );
+  }
+
+  if (!metrics) {
+    return null;
   }
 
   return (
@@ -117,6 +175,37 @@ export function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Gợi ý khi dự án chưa có task nào */}
+      {metrics.totalTasks === 0 && (
+        <div
+          style={{
+            background: 'var(--brand-50, #eff6ff)',
+            border: '1px solid var(--brand-200, #bfdbfe)',
+            borderRadius: '10px',
+            padding: '14px 18px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>💡</span>
+            <span style={{ fontSize: '13.5px', color: 'var(--brand-900, #1e3a8a)' }}>
+              Dự án này chưa có công việc nào. Hãy tạo nhiệm vụ trên bảng Kanban để theo dõi tiến độ và số liệu thực tế!
+            </span>
+          </div>
+          <button
+            className="btn-retry"
+            style={{ padding: '6px 14px', fontSize: '12.5px', whiteSpace: 'nowrap' }}
+            onClick={() => navigate(`/projects/${currentProjectId}/kanban`)}
+          >
+            Đến bảng Kanban →
+          </button>
+        </div>
+      )}
 
       {/* ── Hàng 4 thẻ số liệu ── */}
       <DashboardStats metrics={metrics} />
