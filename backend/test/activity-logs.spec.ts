@@ -8,25 +8,34 @@ import { ResponseInterceptor } from "../src/common/interceptors/response.interce
 import { ActivityLogsController } from "../src/modules/activity-logs/activity-logs.controller";
 import { ActivityLogsService } from "../src/modules/activity-logs/activity-logs.service";
 import { ActivityAction } from "../src/modules/activity-logs/constants/activity-action.constant";
+import { ActivityEntityType } from "../src/modules/activity-logs/constants/activity-entity.constant";
+import type {
+  ProjectUpdatedMetadata,
+  TaskMovedMetadata,
+} from "../src/modules/activity-logs/interfaces/metadata-contract.interface";
 import { TasksService } from "../src/modules/tasks/tasks.service";
 import type { PrismaService } from "../src/prisma/prisma.service";
 
 async function runTests() {
-  console.log("🚀 Bắt đầu kiểm thử Activity Logs (Task 12)...\n");
+  console.log("🚀 Bắt đầu kiểm thử Activity Logs (Task 20 - Sprint 2)...\n");
 
   const projectId = "11111111-1111-1111-1111-111111111111";
   const actorId = "99999999-9999-9999-9999-999999999999";
   const targetUserId = "88888888-8888-8888-8888-888888888888";
   const taskId = "task-1";
 
-  // Mock DB Activity Logs
+  // Mock DB Activity Logs: 30 logs TASK_MOVED, 15 logs PROJECT_UPDATED
   const mockLogs = Array.from({ length: 45 }, (_, i) => ({
     id: `log-${i + 1}`,
     projectId,
     actorId,
-    action: ActivityAction.TASK_MOVED,
-    entityType: "TASK",
-    entityId: taskId,
+    action: i < 30 ? ActivityAction.TASK_MOVED : ActivityAction.PROJECT_UPDATED,
+    entityType: i < 30 ? ActivityEntityType.TASK : ActivityEntityType.PROJECT,
+    entityId: i < 30 ? taskId : projectId,
+    metadata:
+      i < 30
+        ? { fromColumnId: "col-1", toColumnId: "col-2", newPosition: i * 1000 }
+        : { updatedFields: ["name"] },
     createdAt: new Date(Date.now() - i * 1000),
     actor: { id: actorId, fullName: "User Test", avatarUrl: null },
   }));
@@ -34,14 +43,24 @@ async function runTests() {
   const mockPrisma = {
     activityLog: {
       count: async ({ where }: any) => {
-        if (where.projectId === projectId) return mockLogs.length;
-        return 0;
+        let filtered = mockLogs.filter((l) => l.projectId === where?.projectId);
+        if (where?.action) {
+          filtered = filtered.filter((l) => l.action === where.action);
+        }
+        if (where?.entityType) {
+          filtered = filtered.filter((l) => l.entityType === where.entityType);
+        }
+        return filtered.length;
       },
       findMany: async ({ where, skip, take }: any) => {
-        if (where.projectId === projectId) {
-          return mockLogs.slice(skip, skip + take);
+        let filtered = mockLogs.filter((l) => l.projectId === where?.projectId);
+        if (where?.action) {
+          filtered = filtered.filter((l) => l.action === where.action);
         }
-        return [];
+        if (where?.entityType) {
+          filtered = filtered.filter((l) => l.entityType === where.entityType);
+        }
+        return filtered.slice(skip, skip + take);
       },
       create: async ({ data }: any) => {
         return { id: "log-new", ...data, createdAt: new Date() };
@@ -76,23 +95,101 @@ async function runTests() {
   assert.strictEqual(page3.meta.page, 3, "Page phải là 3");
   console.log("✅ TC-2: Phân trang trang cuối trả về đúng 5 items còn lại");
 
-  // TC-3: Helper method ActivityLogsService.log
-  console.log("--- Test Case 3: Helper ghi log tự động ---");
-  const createdLog = await activityLogsService.log({
+  // TC-3: Lọc danh sách theo action
+  console.log("--- Test Case 3: Lọc theo Action (TASK_MOVED) ---");
+  const filteredByAction = await activityLogsService.list(projectId, {
+    page: 1,
+    limit: 50,
+    action: ActivityAction.TASK_MOVED,
+  });
+  assert.strictEqual(
+    filteredByAction.data.length,
+    30,
+    "Phải có đúng 30 log TASK_MOVED",
+  );
+  assert.strictEqual(
+    filteredByAction.meta.total,
+    30,
+    "Total filtered phải là 30",
+  );
+  assert.ok(
+    filteredByAction.data.every((l) => l.action === ActivityAction.TASK_MOVED),
+    "Tất cả kết quả phải có action là TASK_MOVED",
+  );
+  console.log("✅ TC-3: Lọc theo action thành công, trả về đúng 30 bản ghi");
+
+  // TC-4: Lọc danh sách theo entityType
+  console.log("--- Test Case 4: Lọc theo EntityType (PROJECT) ---");
+  const filteredByEntity = await activityLogsService.list(projectId, {
+    page: 1,
+    limit: 50,
+    entityType: ActivityEntityType.PROJECT,
+  });
+  assert.strictEqual(
+    filteredByEntity.data.length,
+    15,
+    "Phải có đúng 15 log entityType PROJECT",
+  );
+  assert.strictEqual(
+    filteredByEntity.meta.total,
+    15,
+    "Total filtered phải là 15",
+  );
+  assert.ok(
+    filteredByEntity.data.every(
+      (l) => l.entityType === ActivityEntityType.PROJECT,
+    ),
+    "Tất cả kết quả phải có entityType là PROJECT",
+  );
+  console.log(
+    "✅ TC-4: Lọc theo entityType thành công, trả về đúng 15 bản ghi",
+  );
+
+  // TC-5: Helper method ActivityLogsService.log với Metadata Contract
+  console.log(
+    "--- Test Case 5: Helper ghi log tự động & Metadata Contract ---",
+  );
+  const projectLog = await activityLogsService.log<ProjectUpdatedMetadata>({
     projectId,
     actorId,
     action: ActivityAction.PROJECT_UPDATED,
-    entityType: "PROJECT",
+    entityType: ActivityEntityType.PROJECT,
     entityId: projectId,
-    metadata: { field: "name", oldValue: "Old", newValue: "New" },
+    metadata: { updatedFields: ["name", "description"] },
   });
-  assert.strictEqual(createdLog.action, ActivityAction.PROJECT_UPDATED);
-  assert.strictEqual(createdLog.projectId, projectId);
-  assert.strictEqual(createdLog.actorId, actorId);
-  console.log("✅ TC-3: Helper activityLogsService.log ghi log thành công");
+  assert.strictEqual(projectLog.action, ActivityAction.PROJECT_UPDATED);
+  assert.strictEqual(projectLog.entityType, ActivityEntityType.PROJECT);
+  assert.strictEqual(projectLog.projectId, projectId);
+  assert.strictEqual(projectLog.actorId, actorId);
+  assert.deepStrictEqual((projectLog as any).metadata, {
+    updatedFields: ["name", "description"],
+  });
 
-  // TC-4: ResponseInterceptor hỗ trợ format phân trang data & meta
-  console.log("--- Test Case 4: ResponseInterceptor chuẩn hóa data & meta ---");
+  const taskLog = await activityLogsService.log<TaskMovedMetadata>({
+    projectId,
+    actorId,
+    action: ActivityAction.TASK_MOVED,
+    entityType: ActivityEntityType.TASK,
+    entityId: taskId,
+    metadata: {
+      fromColumnId: "col-todo",
+      toColumnId: "col-done",
+      newPosition: 2000,
+    },
+  });
+  assert.strictEqual(taskLog.action, ActivityAction.TASK_MOVED);
+  assert.strictEqual(taskLog.entityType, ActivityEntityType.TASK);
+  assert.deepStrictEqual((taskLog as any).metadata, {
+    fromColumnId: "col-todo",
+    toColumnId: "col-done",
+    newPosition: 2000,
+  });
+  console.log(
+    "✅ TC-5: Helper activityLogsService.log ghi log thành công với Metadata Contract chuẩn",
+  );
+
+  // TC-6: ResponseInterceptor hỗ trợ format phân trang data & meta
+  console.log("--- Test Case 6: ResponseInterceptor chuẩn hóa data & meta ---");
   const interceptor = new ResponseInterceptor();
   const mockCallHandler = {
     handle: () => of(page1),
@@ -111,11 +208,11 @@ async function runTests() {
     totalPages: 3,
   });
   console.log(
-    "✅ TC-4: ResponseInterceptor trả về cấu trúc chuẩn { success: true, data: [...], meta: {...} }",
+    "✅ TC-6: ResponseInterceptor trả về cấu trúc chuẩn { success: true, data: [...], meta: {...} }",
   );
 
-  // TC-5: ActivityLogsController RBAC permissions (OWNER, MANAGER, MEMBER, VIEWER)
-  console.log("--- Test Case 5: Phân quyền ActivityLogsController ---");
+  // TC-7: ActivityLogsController RBAC permissions (OWNER, MANAGER, MEMBER, VIEWER)
+  console.log("--- Test Case 7: Phân quyền ActivityLogsController ---");
   const reflector = new Reflector();
   const allowedRoles = reflector.get<ProjectRole[]>(
     PROJECT_ROLES_KEY,
@@ -132,11 +229,36 @@ async function runTests() {
     "Activity log phải cho phép OWNER, MANAGER, MEMBER, VIEWER xem",
   );
   console.log(
-    "✅ TC-5: ActivityLogsController cấu hình đầy đủ quyền đọc [OWNER, MANAGER, MEMBER, VIEWER]",
+    "✅ TC-7: ActivityLogsController cấu hình đầy đủ quyền đọc [OWNER, MANAGER, MEMBER, VIEWER]",
   );
 
-  // TC-6: Ghi Activity Log khi gán (assign) và gỡ (unassign) Task
-  console.log("--- Test Case 6: Ghi log khi Assign & Unassign Task ---");
+  // TC-8: Kiểm tra tính chất Append-only (Không có API hoặc hàm nào cho phép sửa/xóa log)
+  console.log("--- Test Case 8: Kiểm tra tính chất Append-only ---");
+  const controllerMethods = Object.getOwnPropertyNames(
+    ActivityLogsController.prototype,
+  ).filter((m) => m !== "constructor");
+  assert.deepStrictEqual(
+    controllerMethods,
+    ["list"],
+    "ActivityLogsController CHỈ được phép có endpoint list, tuyệt đối không có update/delete",
+  );
+
+  const serviceMethods = Object.getOwnPropertyNames(
+    ActivityLogsService.prototype,
+  ).filter((m) => m !== "constructor");
+  assert.deepStrictEqual(
+    serviceMethods.sort(),
+    ["list", "log"].sort(),
+    "ActivityLogsService CHỈ được phép có list và log (append-only), không có update/delete",
+  );
+  console.log(
+    "✅ TC-8: Khẳng định tính chất Append-only 100%: không có phương thức update hay delete log",
+  );
+
+  // TC-9: Ghi Activity Log khi gán (assign) và gỡ (unassign) Task
+  console.log(
+    "--- Test Case 9: Tương thích luồng Assign & Unassign Task hiện hữu ---",
+  );
   const loggedActions: any[] = [];
   const mockTasksPrisma = {
     task: {
@@ -148,11 +270,9 @@ async function runTests() {
     },
     projectMember: {
       findUnique: async ({ where }: any) => {
-        // Cho phép actor là MEMBER
         if (where.projectId_userId?.userId === actorId) {
           return { projectId, userId: actorId, role: ProjectRole.MEMBER };
         }
-        // Target user là thành viên project
         if (where.projectId_userId?.userId === targetUserId) {
           return { projectId, userId: targetUserId, role: ProjectRole.MEMBER };
         }
@@ -160,7 +280,7 @@ async function runTests() {
       },
     },
     taskAssignment: {
-      findUnique: async () => null, // Chưa được gán
+      findUnique: async () => null,
       create: async ({ data }: any) => ({ id: "assign-1", ...data }),
       delete: async () => ({ id: "assign-1" }),
     },
@@ -187,10 +307,9 @@ async function runTests() {
   assert.deepStrictEqual(loggedActions[0].metadata, {
     assignedUserId: targetUserId,
   });
-  console.log("✅ TC-6a: Gán task tự động ghi log TASK_ASSIGNED kèm metadata");
+  console.log("✅ TC-9a: Gán task tự động ghi log TASK_ASSIGNED kèm metadata");
 
   // Unassign task
-  // Giả lập existing assignment
   (mockTasksPrisma.taskAssignment.findUnique as any) = async () => ({
     id: "assign-1",
     taskId,
@@ -207,11 +326,11 @@ async function runTests() {
     unassignedUserId: targetUserId,
   });
   console.log(
-    "✅ TC-6b: Gỡ gán task tự động ghi log TASK_UNASSIGNED kèm metadata",
+    "✅ TC-9b: Gỡ gán task tự động ghi log TASK_UNASSIGNED kèm metadata",
   );
 
   console.log(
-    "\n🎉 TOÀN BỘ 6/6 TEST CASES CHO TASK 12 ĐÃ PASS THÀNH CÔNG 100%!",
+    "\n🎉 TOÀN BỘ 9/9 TEST CASES CHO TASK 20 ĐÃ PASS THÀNH CÔNG 100%!\n",
   );
 }
 
