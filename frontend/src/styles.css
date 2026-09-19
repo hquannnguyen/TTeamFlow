@@ -3553,6 +3553,13 @@ a { color: inherit; }
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 200px);
+  transition: all 0.15s ease;
+}
+
+.kanban-column-card.drag-over {
+  background: #eef2ff !important;
+  border: 2px dashed #6366f1 !important;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
 }
 
 .kanban-col-header-bar {
@@ -3579,12 +3586,14 @@ a { color: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
 }
 
 .kanban-col-dot {
   width: 9px;
   height: 9px;
   border-radius: 9999px;
+  flex-shrink: 0;
 }
 
 .kanban-col-dot.todo { background: #94a3b8; }
@@ -3595,6 +3604,19 @@ a { color: inherit; }
   font-size: 13.5px;
   font-weight: 600;
   color: #1e293b;
+  cursor: pointer;
+}
+
+.kanban-col-name-input {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #6366f1;
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+  width: 130px;
 }
 
 .kanban-col-count-pill {
@@ -3607,7 +3629,13 @@ a { color: inherit; }
   border-radius: 9999px;
 }
 
-.kanban-col-add-btn {
+.kanban-col-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kanban-col-icon-btn {
   background: transparent;
   border: none;
   color: #94a3b8;
@@ -3619,9 +3647,14 @@ a { color: inherit; }
   transition: all 0.15s;
 }
 
-.kanban-col-add-btn:hover {
+.kanban-col-icon-btn:hover {
   background: #e2e8f0;
   color: #334155;
+}
+
+.kanban-col-icon-btn.delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .kanban-tasks-list-box {
@@ -3634,6 +3667,28 @@ a { color: inherit; }
   min-height: 100px;
 }
 
+.kanban-add-column-card {
+  flex: 0 0 280px;
+  width: 280px;
+  background: #ffffff;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 120px;
+}
+
+.kanban-add-column-card:hover {
+  border-color: #6366f1;
+  background: #f8fafc;
+}
+
 /* ── Task Card (Stitch Exact Styling) ── */
 .stitch-task-card {
   background: #ffffff;
@@ -3642,8 +3697,18 @@ a { color: inherit; }
   padding: 14px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: all 0.15s ease;
-  cursor: pointer;
+  cursor: grab;
   user-select: none;
+}
+
+.stitch-task-card:active {
+  cursor: grabbing;
+}
+
+.stitch-task-card.dragging {
+  opacity: 0.4;
+  border: 2px dashed #6366f1;
+  box-shadow: none;
 }
 
 .stitch-task-card:hover {

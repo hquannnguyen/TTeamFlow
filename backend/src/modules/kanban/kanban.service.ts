@@ -5,7 +5,9 @@ import {
 } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ActivityAction } from "../activity-logs/constants/activity-action.constant";
+import { CreateColumnDto } from "./dto/create-column.dto";
 import { ReorderColumnsDto } from "./dto/reorder-columns.dto";
+import { UpdateColumnDto } from "./dto/update-column.dto";
 
 @Injectable()
 export class KanbanService {
@@ -50,6 +52,121 @@ export class KanbanService {
         },
       },
     });
+  }
+
+  async createColumn(projectId: string, actorId: string, dto: CreateColumnDto) {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, deletedAt: null },
+    });
+    if (!project) {
+      throw new NotFoundException("Dự án không tồn tại");
+    }
+
+    // Lấy position lớn nhất hiện tại trong project
+    const maxCol = await this.prisma.kanbanColumn.findFirst({
+      where: { projectId },
+      orderBy: { position: "desc" },
+    });
+    const position = (maxCol?.position ?? 0) + 1000;
+
+    const column = await this.prisma.kanbanColumn.create({
+      data: {
+        projectId,
+        name: dto.name.trim(),
+        position,
+      },
+    });
+
+    await this.prisma.activityLog.create({
+      data: {
+        projectId,
+        actorId,
+        action: ActivityAction.COLUMN_REORDERED,
+        entityType: "KANBAN_COLUMN",
+        entityId: column.id,
+        metadata: { name: column.name, position: column.position },
+      },
+    });
+
+    return column;
+  }
+
+  async updateColumn(
+    projectId: string,
+    columnId: string,
+    dto: UpdateColumnDto,
+  ) {
+    const column = await this.prisma.kanbanColumn.findFirst({
+      where: { id: columnId, projectId },
+    });
+    if (!column) {
+      throw new NotFoundException("Cột không tồn tại hoặc không thuộc dự án");
+    }
+
+    return this.prisma.kanbanColumn.update({
+      where: { id: columnId },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.isCompleted !== undefined
+          ? { isCompleted: dto.isCompleted }
+          : {}),
+      },
+    });
+  }
+
+  async deleteColumn(
+    projectId: string,
+    columnId: string,
+    targetColumnId?: string,
+  ) {
+    const column = await this.prisma.kanbanColumn.findFirst({
+      where: { id: columnId, projectId },
+      include: {
+        _count: {
+          select: {
+            tasks: {
+              where: { deletedAt: null },
+            },
+          },
+        },
+      },
+    });
+
+    if (!column) {
+      throw new NotFoundException("Cột không tồn tại hoặc không thuộc dự án");
+    }
+
+    const taskCount = column._count.tasks;
+
+    if (taskCount > 0) {
+      if (!targetColumnId || targetColumnId === columnId) {
+        throw new BadRequestException(
+          "Vui lòng di chuyển các công việc sang cột khác trước khi xóa",
+        );
+      }
+
+      const targetCol = await this.prisma.kanbanColumn.findFirst({
+        where: { id: targetColumnId, projectId },
+      });
+      if (!targetCol) {
+        throw new NotFoundException(
+          "Cột đích chuyển giao công việc không tồn tại",
+        );
+      }
+
+      // Chuyển toàn bộ nhiệm vụ sang cột đích
+      await this.prisma.task.updateMany({
+        where: { columnId, deletedAt: null },
+        data: { columnId: targetColumnId },
+      });
+    }
+
+    // Xóa bản ghi cột
+    await this.prisma.kanbanColumn.delete({
+      where: { id: columnId },
+    });
+
+    return { message: "Xóa cột thành công" };
   }
 
   async reorderColumns(

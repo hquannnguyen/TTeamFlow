@@ -80,3 +80,47 @@ export async function deleteTask(taskId: string) {
   );
   return response.data.data;
 }
+
+export async function createColumn(projectId: string, name: string) {
+  const response = await http.post<{ success: true; data: KanbanColumn }>(
+    `/projects/${projectId}/columns`,
+    { name },
+  );
+  return response.data.data;
+}
+
+export async function updateColumn(
+  projectId: string,
+  columnId: string,
+  dto: { name?: string; isCompleted?: boolean },
+) {
+  const response = await http.patch<{ success: true; data: KanbanColumn }>(
+    `/projects/${projectId}/columns/${columnId}`,
+    dto,
+  );
+  return response.data.data;
+}
+
+export async function deleteColumn(
+  projectId: string,
+  columnId: string,
+  targetColumnId?: string,
+) {
+  const url = targetColumnId
+    ? `/projects/${projectId}/columns/${columnId}?targetColumnId=${targetColumnId}`
+    : `/projects/${projectId}/columns/${columnId}`;
+  const response = await http.delete<{ success: true; data: { message: string } }>(url);
+  return response.data.data;
+}
+
+export async function reorderColumns(
+  projectId: string,
+  columns: Array<{ id: string; position: number }>,
+) {
+  const response = await http.patch<{ success: true; data: KanbanColumn[] }>(
+    `/projects/${projectId}/columns/reorder`,
+    { columns: columns.map((c) => ({ columnId: c.id, position: c.position })) },
+  );
+  return response.data.data;
+}
+

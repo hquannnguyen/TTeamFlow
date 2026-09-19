@@ -1,7 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getBoard, moveTask, type KanbanTask, type KanbanColumn } from '../api/kanban.api';
+import {
+  getBoard,
+  moveTask,
+  createColumn,
+  updateColumn,
+  deleteColumn,
+  reorderColumns,
+  type KanbanTask,
+  type KanbanColumn,
+} from '../api/kanban.api';
 import { getProjects, getProject } from '../../projects/api/projects.api';
 import { KanbanTaskCard } from '../components/KanbanTaskCard';
 import { CreateTaskModal } from '../components/CreateTaskModal';
@@ -47,9 +56,20 @@ export function ProjectBoardPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
 
-  // Modals state
+  // Modals & Column Customization state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createDefaultColumnId, setCreateDefaultColumnId] = useState<string>('');
+
+  // Drag & drop drop target state
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+
+  // Column management state (6.3.2)
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
+  const [editingColumnName, setEditingColumnName] = useState('');
+  const [deletingColumn, setDeletingColumn] = useState<KanbanColumn | null>(null);
+  const [transferTargetColumnId, setTransferTargetColumnId] = useState<string>('');
 
   // Move Task Mutation (Task 17 API)
   const moveTaskMutation = useMutation({
@@ -63,13 +83,11 @@ export function ProjectBoardPage() {
       newPosition: number;
     }) => moveTask(taskId, targetColumnId, newPosition),
     onMutate: async ({ taskId, targetColumnId }) => {
-      // Cancel outgoing queries for optimistic update
       await queryClient.cancelQueries({ queryKey: ['kanban', currentProjectId] });
       const previousBoard = queryClient.getQueryData<KanbanColumn[]>(['kanban', currentProjectId]);
 
       if (previousBoard) {
         let movedTask: KanbanTask | null = null;
-        // Remove task from current column
         const nextBoard = previousBoard.map((col) => {
           const found = col.tasks.find((t) => t.id === taskId);
           if (found) {
@@ -82,7 +100,6 @@ export function ProjectBoardPage() {
           return col;
         });
 
-        // Add task to target column
         if (movedTask) {
           const targetCol = nextBoard.find((c) => c.id === targetColumnId);
           if (targetCol) {
@@ -112,19 +129,122 @@ export function ProjectBoardPage() {
     },
   });
 
+  // Create Column Mutation (6.3.2)
+  const createColumnMutation = useMutation({
+    mutationFn: (name: string) => createColumn(currentProjectId, name),
+    onSuccess: () => {
+      toast.success('Thêm cột mới thành công');
+      setIsAddingColumn(false);
+      setNewColumnName('');
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể thêm cột mới';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
+  // Update Column Mutation (6.3.2 Rename)
+  const updateColumnMutation = useMutation({
+    mutationFn: ({ columnId, name }: { columnId: string; name: string }) =>
+      updateColumn(currentProjectId, columnId, { name }),
+    onSuccess: () => {
+      toast.success('Đổi tên cột thành công');
+      setEditingColumnId(null);
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể đổi tên cột';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
+  // Delete Column Mutation (6.3.2 Delete with transfer)
+  const deleteColumnMutation = useMutation({
+    mutationFn: ({ columnId, targetColumnId }: { columnId: string; targetColumnId?: string }) =>
+      deleteColumn(currentProjectId, columnId, targetColumnId),
+    onSuccess: () => {
+      toast.success('Xóa cột thành công');
+      setDeletingColumn(null);
+      setTransferTargetColumnId('');
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể xóa cột';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
+  // Reorder Columns Mutation (6.3.2 Reorder)
+  const reorderColumnsMutation = useMutation({
+    mutationFn: (newCols: Array<{ id: string; position: number }>) =>
+      reorderColumns(currentProjectId, newCols),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể đổi thứ tự cột';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
   const handleMoveTask = (taskId: string, targetColumnId: string) => {
-    // Determine new position in target column
     const targetCol = columns.find((c) => c.id === targetColumnId);
     const maxPos = targetCol?.tasks.reduce((max, t) => Math.max(max, t.position), 0) ?? 0;
     const newPosition = maxPos + 1000;
     moveTaskMutation.mutate({ taskId, targetColumnId, newPosition });
   };
 
+  const handleCreateColumn = () => {
+    if (!newColumnName.trim()) {
+      toast.error('Vui lòng nhập tên cột');
+      return;
+    }
+    createColumnMutation.mutate(newColumnName.trim());
+  };
+
+  const handleSaveRenameColumn = (columnId: string) => {
+    if (!editingColumnName.trim()) {
+      setEditingColumnId(null);
+      return;
+    }
+    updateColumnMutation.mutate({ columnId, name: editingColumnName.trim() });
+  };
+
+  const handleMoveColumn = (index: number, direction: 'left' | 'right') => {
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= columns.length) return;
+
+    const newCols = [...columns];
+    const temp = newCols[index];
+    newCols[index] = newCols[targetIndex];
+    newCols[targetIndex] = temp;
+
+    const reorderedItems = newCols.map((c, idx) => ({
+      id: c.id,
+      position: (idx + 1) * 1000,
+    }));
+
+    reorderColumnsMutation.mutate(reorderedItems);
+  };
+
+  const handleConfirmDeleteColumn = () => {
+    if (!deletingColumn) return;
+    const taskCount = deletingColumn.tasks?.length ?? 0;
+    if (taskCount > 0 && !transferTargetColumnId) {
+      toast.error('Vui lòng di chuyển các công việc sang cột khác trước khi xóa');
+      return;
+    }
+    deleteColumnMutation.mutate({
+      columnId: deletingColumn.id,
+      targetColumnId: taskCount > 0 ? transferTargetColumnId : undefined,
+    });
+  };
+
   // Filter tasks in columns
   const filteredColumns = useMemo(() => {
     return columns.map((col) => {
       const filteredTasks = col.tasks.filter((task) => {
-        // Search query
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
           const matchTitle = task.title.toLowerCase().includes(q);
@@ -133,18 +253,15 @@ export function ProjectBoardPage() {
           if (!matchTitle && !matchDesc && !matchNum) return false;
         }
 
-        // Assignee filter
         if (selectedAssignee !== 'ALL') {
           const hasAssignee = task.assignments?.some((a) => a.user.id === selectedAssignee);
           if (!hasAssignee) return false;
         }
 
-        // Priority filter
         if (selectedPriority !== 'ALL') {
           if (task.priority !== selectedPriority) return false;
         }
 
-        // Overdue filter
         if (onlyOverdue) {
           if (!task.dueDate || task.completedAt || col.isCompleted) return false;
           const isLate = new Date(task.dueDate).getTime() < Date.now();
@@ -253,6 +370,10 @@ export function ProjectBoardPage() {
       </div>
     );
   }
+
+  const otherColumnsForDelete = deletingColumn
+    ? columns.filter((c) => c.id !== deletingColumn.id)
+    : [];
 
   return (
     <div className="kanban-page-container">
@@ -391,7 +512,6 @@ export function ProjectBoardPage() {
 
         {/* Filters Bar (Matching Stitch Design) */}
         <div className="kanban-filters-bar">
-          {/* Assignee Filter Dropdown */}
           <select
             className="kanban-filter-pill"
             value={selectedAssignee}
@@ -405,7 +525,6 @@ export function ProjectBoardPage() {
             ))}
           </select>
 
-          {/* Priority Filter Dropdown */}
           <select
             className="kanban-filter-pill"
             value={selectedPriority}
@@ -417,7 +536,6 @@ export function ProjectBoardPage() {
             <option value="LOW">Thấp</option>
           </select>
 
-          {/* Overdue Filter Button */}
           <button
             type="button"
             className={`kanban-filter-pill ${onlyOverdue ? 'active' : ''}`}
@@ -426,7 +544,6 @@ export function ProjectBoardPage() {
             Quá hạn {onlyOverdue ? '✓' : ''}
           </button>
 
-          {/* Search Input */}
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
             <input
               type="text"
@@ -442,7 +559,7 @@ export function ProjectBoardPage() {
 
       {/* ── Main Kanban Columns Section ── */}
       <div className="kanban-columns-scroll-area">
-        {filteredColumns.map((column) => {
+        {filteredColumns.map((column, colIdx) => {
           const colNameUpper = column.name.toUpperCase();
           const colType = column.isCompleted || colNameUpper.includes('DONE') || colNameUpper.includes('XONG')
             ? 'done'
@@ -450,29 +567,123 @@ export function ProjectBoardPage() {
             ? 'doing'
             : 'todo';
 
+          const isDragOver = dragOverColumnId === column.id;
+
           return (
-            <div className="kanban-column-card" key={column.id}>
+            <div
+              className={`kanban-column-card ${isDragOver ? 'drag-over' : ''}`}
+              key={column.id}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOverColumnId !== column.id) {
+                  setDragOverColumnId(column.id);
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                setDragOverColumnId(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOverColumnId(null);
+                const taskId = e.dataTransfer.getData('text/plain');
+                if (taskId) {
+                  handleMoveTask(taskId, column.id);
+                }
+              }}
+            >
               {/* Column Header */}
               <div className={`kanban-col-header-bar ${colType}`}>
                 <div className="kanban-col-title-group">
                   <span className={`kanban-col-dot ${colType}`} />
-                  <span className="kanban-col-name">{column.name}</span>
+
+                  {/* Inline Rename Column (6.3.2) */}
+                  {editingColumnId === column.id ? (
+                    <input
+                      type="text"
+                      className="kanban-col-name-input"
+                      autoFocus
+                      value={editingColumnName}
+                      onChange={(e) => setEditingColumnName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveRenameColumn(column.id);
+                        if (e.key === 'Escape') setEditingColumnId(null);
+                      }}
+                      onBlur={() => handleSaveRenameColumn(column.id)}
+                    />
+                  ) : (
+                    <span
+                      className="kanban-col-name"
+                      title="Double click để đổi tên cột"
+                      onDoubleClick={() => {
+                        setEditingColumnId(column.id);
+                        setEditingColumnName(column.name);
+                      }}
+                    >
+                      {column.name}
+                    </span>
+                  )}
+
                   <span className="kanban-col-count-pill">{column.tasks.length}</span>
                 </div>
-                <button
-                  type="button"
-                  className="kanban-col-add-btn"
-                  title="Thêm nhiệm vụ vào cột này"
-                  onClick={() => {
-                    setCreateDefaultColumnId(column.id);
-                    setIsCreateModalOpen(true);
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" x2="12" y1="5" y2="19" />
-                    <line x1="5" x2="19" y1="12" y2="12" />
-                  </svg>
-                </button>
+
+                <div className="kanban-col-header-actions">
+                  {/* Reorder Columns Left / Right (6.3.2) */}
+                  {colIdx > 0 && (
+                    <button
+                      type="button"
+                      className="kanban-col-icon-btn"
+                      title="Di chuyển cột sang trái"
+                      onClick={() => handleMoveColumn(colIdx, 'left')}
+                    >
+                      ←
+                    </button>
+                  )}
+                  {colIdx < columns.length - 1 && (
+                    <button
+                      type="button"
+                      className="kanban-col-icon-btn"
+                      title="Di chuyển cột sang phải"
+                      onClick={() => handleMoveColumn(colIdx, 'right')}
+                    >
+                      →
+                    </button>
+                  )}
+
+                  {/* Add Task to Column */}
+                  <button
+                    type="button"
+                    className="kanban-col-icon-btn"
+                    title="Thêm nhiệm vụ vào cột này"
+                    onClick={() => {
+                      setCreateDefaultColumnId(column.id);
+                      setIsCreateModalOpen(true);
+                    }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" x2="12" y1="5" y2="19" />
+                      <line x1="5" x2="19" y1="12" y2="12" />
+                    </svg>
+                  </button>
+
+                  {/* Delete Column (6.3.2) */}
+                  <button
+                    type="button"
+                    className="kanban-col-icon-btn delete"
+                    title="Xóa cột này"
+                    onClick={() => {
+                      setDeletingColumn(column);
+                      setTransferTargetColumnId('');
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
               </div>
 
               {/* Tasks List Box */}
@@ -508,7 +719,115 @@ export function ProjectBoardPage() {
             </div>
           );
         })}
+
+        {/* ── Add New Column Card (6.3.2 Thêm cột) ── */}
+        {isAddingColumn ? (
+          <div className="kanban-column-card" style={{ padding: '16px', gap: '12px' }}>
+            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>Thêm cột mới</h4>
+            <input
+              type="text"
+              className="kanban-col-name-input"
+              style={{ width: '100%' }}
+              placeholder="Nhập tên cột trạng thái..."
+              autoFocus
+              value={newColumnName}
+              onChange={(e) => setNewColumnName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateColumn();
+                if (e.key === 'Escape') setIsAddingColumn(false);
+              }}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                onClick={() => setIsAddingColumn(false)}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                onClick={handleCreateColumn}
+              >
+                Thêm cột
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="kanban-add-column-card" onClick={() => setIsAddingColumn(true)}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="19" x2="19" y2="12" />
+            </svg>
+            <span style={{ fontSize: '13.5px', fontWeight: 600, color: '#4f46e5' }}>+ Thêm cột mới</span>
+          </div>
+        )}
       </div>
+
+      {/* Delete Column Transfer Modal (6.3.2) */}
+      {deletingColumn && (
+        <div className="modal-overlay" onClick={() => setDeletingColumn(null)}>
+          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Xóa cột "{deletingColumn.name}"</h2>
+              <button type="button" className="modal-close-btn" onClick={() => setDeletingColumn(null)}>
+                ×
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {deletingColumn.tasks && deletingColumn.tasks.length > 0 ? (
+                <>
+                  <div style={{ padding: '12px', borderRadius: '8px', background: '#fffbe6', border: '1px solid #ffe58f', color: '#8c6b00', fontSize: '13.5px' }}>
+                    ⚠️ Cột <strong>{deletingColumn.name}</strong> đang chứa <strong>{deletingColumn.tasks.length}</strong> công việc. Bạn phải chọn 1 cột khác để di chuyển các công việc này trước khi xóa.
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 600 }}>Cột đích chuyển giao:</label>
+                    <select
+                      className="form-select"
+                      value={transferTargetColumnId}
+                      onChange={(e) => setTransferTargetColumnId(e.target.value)}
+                    >
+                      <option value="">-- Chọn cột chuyển giao --</option>
+                      {otherColumnsForDelete.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.tasks.length} nhiệm vụ)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <p style={{ color: '#475569', fontSize: '14px', margin: 0 }}>
+                  Bạn có chắc chắn muốn xóa cột <strong>{deletingColumn.name}</strong>? Thao tác này không thể hoàn tất nếu không tạo lại cột.
+                </p>
+              )}
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setDeletingColumn(null)}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ background: '#dc2626', borderColor: '#dc2626' }}
+                onClick={handleConfirmDeleteColumn}
+              >
+                Xác nhận xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Task Modal */}
       <CreateTaskModal

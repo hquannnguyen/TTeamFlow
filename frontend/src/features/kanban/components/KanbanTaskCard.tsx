@@ -10,6 +10,8 @@ interface KanbanTaskCardProps {
   availableColumns?: Array<{ id: string; name: string }>;
   currentColumnId?: string;
   onClick?: () => void;
+  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
 function getPriorityLabel(priority: string) {
@@ -55,7 +57,10 @@ export function KanbanTaskCard({
   availableColumns = [],
   currentColumnId,
   onClick,
+  onDragStart,
+  onDragEnd,
 }: KanbanTaskCardProps) {
+  const [isDragging, setIsDragging] = React.useState(false);
   const priorityInfo = getPriorityLabel(task.priority);
   const formattedDueDate = formatDate(task.dueDate);
   const overdue = isOverdue(task.dueDate, isCompletedColumn || Boolean(task.completedAt));
@@ -78,7 +83,22 @@ export function KanbanTaskCard({
   const nextColumn = currentIndex >= 0 && currentIndex < availableColumns.length - 1 ? availableColumns[currentIndex + 1] : null;
 
   return (
-    <div className="stitch-task-card" onClick={onClick}>
+    <div
+      className={`stitch-task-card ${isDragging ? 'dragging' : ''}`}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', task.id);
+        e.dataTransfer.setData('application/json', JSON.stringify({ taskId: task.id, columnId: task.columnId }));
+        e.dataTransfer.effectAllowed = 'move';
+        setIsDragging(true);
+        onDragStart?.(e);
+      }}
+      onDragEnd={(e) => {
+        setIsDragging(false);
+        onDragEnd?.(e);
+      }}
+      onClick={onClick}
+    >
       {/* Top Row: Task Key & Priority */}
       <div className="stitch-card-top-row">
         <span className={`stitch-task-key-tag ${isDone ? 'completed' : ''}`}>
