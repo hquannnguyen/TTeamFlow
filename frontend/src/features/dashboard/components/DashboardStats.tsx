@@ -5,17 +5,18 @@ interface DashboardStatsProps {
 }
 
 export function DashboardStats({ metrics }: DashboardStatsProps) {
-  const total = metrics.totalTasks ?? 240;
-  const progress = metrics.progress ?? 68;
+  const total = metrics.totalTasks ?? 0;
+  const progress = metrics.progress ?? 0;
   const target = metrics.targetProgress ?? 80;
-  const active = metrics.activeTasks ?? 45;
-  const overdue = metrics.overdueTasks ?? 3;
-  const growth = metrics.growthRate ?? 12;
+  const completed = metrics.completedTasks ?? 0;
+  const active = metrics.activeTasks ?? Math.max(0, total - completed);
+  const overdue = metrics.overdueTasks ?? 0;
+  const growth = metrics.growthRate ?? (total > 0 ? 12 : 0);
 
-  // Calculate SVG circle stroke properties for the gauge
+  // Tính toán chu vi hình tròn SVG cho đồng hồ tiến độ (Circular Gauge)
   const radius = 28;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (progress / 100) * circumference;
+  const strokeDashoffset = circumference - (Math.min(100, Math.max(0, progress)) / 100) * circumference;
 
   return (
     <div className="metrics-grid">
@@ -23,13 +24,12 @@ export function DashboardStats({ metrics }: DashboardStatsProps) {
       <div className="metric-card">
         <div className="metric-card-header">
           <span className="metric-title">Tổng số nhiệm vụ</span>
-          <span className="metric-badge-growth">~ {growth}%</span>
+          {total > 0 && <span className="metric-badge-growth">~ {growth}%</span>}
         </div>
         <div className="metric-card-body">
           <div className="metric-main-value">{total}</div>
-          <div className="metric-subtext">Trên tất cả dự án</div>
+          <div className="metric-subtext">Trong dự án hiện tại</div>
         </div>
-        {/* Soft wave sparkline in bottom right */}
         <div className="metric-sparkline-wrap">
           <svg width="80" height="36" viewBox="0 0 80 36" fill="none">
             <path
@@ -82,7 +82,7 @@ export function DashboardStats({ metrics }: DashboardStatsProps) {
           <div className="gauge-meta">
             <div className="gauge-target">Mục tiêu: {target}%</div>
             <div className="gauge-status">
-              <span>↑</span> Đúng tiến độ
+              <span>{progress >= target ? '✓' : '↑'}</span> {progress >= target ? 'Đạt mục tiêu' : 'Đang thực hiện'}
             </div>
           </div>
         </div>
@@ -91,7 +91,7 @@ export function DashboardStats({ metrics }: DashboardStatsProps) {
       {/* 3. Khối lượng công việc đang xử lý */}
       <div className="metric-card">
         <div className="metric-card-header">
-          <span className="metric-title">Khối lượng công việc đang xử lý</span>
+          <span className="metric-title">Khối lượng đang xử lý</span>
           <svg className="metric-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
@@ -103,7 +103,7 @@ export function DashboardStats({ metrics }: DashboardStatsProps) {
         </div>
         <div className="metric-card-body">
           <div className="metric-main-value">{active}</div>
-          <div className="metric-subtext">Nhiệm vụ đang hoạt động</div>
+          <div className="metric-subtext">Nhiệm vụ đang thực hiện</div>
         </div>
         <div className="metric-mini-bars">
           <span style={{ height: '14px', background: '#e0e7ff' }}></span>
@@ -114,22 +114,19 @@ export function DashboardStats({ metrics }: DashboardStatsProps) {
       </div>
 
       {/* 4. Nhiệm vụ quá hạn */}
-      <div className="metric-card metric-card-warning">
+      <div className={`metric-card ${overdue > 0 ? 'metric-card-warning' : ''}`}>
         <div className="metric-card-header">
-          <span className="metric-title text-warning">Nhiệm vụ quá hạn</span>
-          <svg className="metric-icon-warning" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <span className={`metric-title ${overdue > 0 ? 'text-warning' : ''}`}>Nhiệm vụ quá hạn</span>
+          <svg className={overdue > 0 ? "metric-icon-warning" : "metric-icon"} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
             <line x1="12" y1="9" x2="12" y2="13" />
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
         </div>
         <div className="metric-card-body">
-          <div className="metric-main-value text-danger">{overdue}</div>
+          <div className={`metric-main-value ${overdue > 0 ? 'text-danger' : ''}`}>{overdue}</div>
           <div className="overdue-action-row">
-            <span className="overdue-label">Cần xử lý</span>
-            <button className="overdue-action-btn" type="button">
-              Xem danh sách
-            </button>
+            <span className="overdue-label">{overdue > 0 ? 'Cần xử lý gấp' : 'Đúng hạn 100%'}</span>
           </div>
         </div>
       </div>
