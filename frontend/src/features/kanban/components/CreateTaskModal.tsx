@@ -1,47 +1,47 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createTask, type KanbanColumn } from '../api/kanban.api';
+import { createTask, type KanbanColumn, type KanbanTask } from '../api/kanban.api';
 import { toast } from '../../../components/ui/toast.store';
 
 interface CreateTaskModalProps {
   projectId: string;
   columns: KanbanColumn[];
   defaultColumnId?: string;
+  members?: Array<{ user: { id: string; fullName: string; avatarUrl?: string | null } }>;
   isOpen: boolean;
   onClose: () => void;
+  onTaskCreated?: (task: KanbanTask) => void;
 }
 
 export function CreateTaskModal({
   projectId,
   columns,
   defaultColumnId,
+  members = [],
   isOpen,
   onClose,
+  onTaskCreated,
 }: CreateTaskModalProps) {
   const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [columnId, setColumnId] = useState(defaultColumnId || columns[0]?.id || '');
-  const [priority, setPriority] = useState<'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'>('MEDIUM');
-  const [dueDate, setDueDate] = useState('');
+  const [assigneeId, setAssigneeId] = useState('');
+  const targetColumnId = defaultColumnId || columns[0]?.id || '';
 
   const mutation = useMutation({
     mutationFn: () =>
       createTask(projectId, {
-        columnId: columnId || columns[0]?.id,
+        columnId: targetColumnId,
         title: title.trim(),
-        description: description.trim() || undefined,
-        priority,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+        assigneeIds: assigneeId ? [assigneeId] : undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (newTask) => {
       queryClient.invalidateQueries({ queryKey: ['kanban', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      toast.success('Đã tạo nhiệm vụ mới thành công');
-      onClose();
+      toast.success('Đã tạo nhiệm vụ thành công');
       setTitle('');
-      setDescription('');
-      setDueDate('');
+      setAssigneeId('');
+      onClose();
+      onTaskCreated?.(newTask);
     },
     onError: (err: unknown) => {
       const responseData =
@@ -59,11 +59,13 @@ export function CreateTaskModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-card"
-        style={{ maxWidth: '520px' }}
+        style={{ maxWidth: '480px', borderRadius: '16px' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header">
-          <h2 className="modal-title">Tạo nhiệm vụ mới</h2>
+        <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
+          <h2 className="modal-title" style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+            Tạo nhiệm vụ mới
+          </h2>
           <button type="button" className="btn-close-modal" onClick={onClose}>
             ✕
           </button>
@@ -76,14 +78,23 @@ export function CreateTaskModal({
             mutation.mutate();
           }}
           className="modal-form"
+          style={{ padding: '20px 24px' }}
         >
-          <div className="form-group">
-            <label className="form-label">
+          {/* 1. Tiêu đề nhiệm vụ */}
+          <div className="form-group" style={{ marginBottom: '20px' }}>
+            <label className="form-label" style={{ fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
               Tiêu đề nhiệm vụ <span style={{ color: '#ef4444' }}>*</span>
             </label>
             <input
               type="text"
               className="form-input"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '14px',
+              }}
               placeholder="Nhập tiêu đề nhiệm vụ..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -92,64 +103,38 @@ export function CreateTaskModal({
             />
           </div>
 
-          <div className="form-row" style={{ display: 'flex', gap: '12px' }}>
-            <div className="form-group" style={{ flex: 1 }}>
-              <label className="form-label">Cột Kanban</label>
-              <select
-                className="form-select"
-                value={columnId}
-                onChange={(e) => setColumnId(e.target.value)}
-              >
-                {columns.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group" style={{ flex: 1 }}>
-              <label className="form-label">Độ ưu tiên</label>
-              <select
-                className="form-select"
-                value={priority}
-                onChange={(e) =>
-                  setPriority(e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT')
-                }
-              >
-                <option value="LOW">Thấp</option>
-                <option value="MEDIUM">Trung bình</option>
-                <option value="HIGH">Cao</option>
-                <option value="URGENT">Khẩn cấp</option>
-              </select>
-            </div>
+          {/* 2. Người được phân công nhiệm vụ */}
+          <div className="form-group" style={{ marginBottom: '24px' }}>
+            <label className="form-label" style={{ fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+              Người được phân công
+            </label>
+            <select
+              className="form-select"
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '14px',
+                background: '#ffffff',
+              }}
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+            >
+              <option value="">-- Chọn thành viên (Chưa phân công) --</option>
+              {members.map((m) => (
+                <option key={m.user.id} value={m.user.id}>
+                  {m.user.fullName}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Hạn hoàn thành</label>
-            <input
-              type="date"
-              className="form-input"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Mô tả chi tiết</label>
-            <textarea
-              className="form-textarea"
-              rows={3}
-              placeholder="Mô tả nội dung công việc cần làm..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          <div className="modal-actions">
+          <div className="modal-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
             <button
               type="button"
               className="btn-secondary"
+              style={{ padding: '10px 20px', borderRadius: '8px', fontWeight: 600 }}
               onClick={onClose}
               disabled={mutation.isPending}
             >
@@ -158,6 +143,13 @@ export function CreateTaskModal({
             <button
               type="submit"
               className="btn-primary"
+              style={{
+                padding: '10px 24px',
+                borderRadius: '8px',
+                fontWeight: 600,
+                background: '#6366f1',
+                borderColor: '#6366f1',
+              }}
               disabled={mutation.isPending || !title.trim()}
             >
               {mutation.isPending ? 'Đang tạo...' : 'Tạo nhiệm vụ'}

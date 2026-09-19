@@ -57,7 +57,7 @@ export function ProjectBoardPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
 
-  // Modals & Column Customization state
+  // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createDefaultColumnId, setCreateDefaultColumnId] = useState<string>('');
 
@@ -245,14 +245,8 @@ export function ProjectBoardPage() {
 
   const handleConfirmDeleteColumn = () => {
     if (!deletingColumn) return;
-    const taskCount = deletingColumn.tasks?.length ?? 0;
-    if (taskCount > 0 && !transferTargetColumnId) {
-      toast.error('Vui lòng di chuyển các công việc sang cột khác trước khi xóa');
-      return;
-    }
     deleteColumnMutation.mutate({
       columnId: deletingColumn.id,
-      targetColumnId: taskCount > 0 ? transferTargetColumnId : undefined,
     });
   };
 
@@ -602,15 +596,53 @@ export function ProjectBoardPage() {
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOverColumnId(null);
-                const taskId = e.dataTransfer.getData('text/plain');
-                if (taskId) {
-                  handleMoveTask(taskId, column.id);
+                const rawData = e.dataTransfer.getData('text/plain');
+                if (rawData.startsWith('column:')) {
+                  const draggedColId = rawData.replace('column:', '');
+                  if (draggedColId && draggedColId !== column.id) {
+                    const fromIndex = columns.findIndex((c) => c.id === draggedColId);
+                    const toIndex = columns.findIndex((c) => c.id === column.id);
+                    if (fromIndex >= 0 && toIndex >= 0) {
+                      const reordered = [...columns];
+                      const [moved] = reordered.splice(fromIndex, 1);
+                      reordered.splice(toIndex, 0, moved);
+                      const payload = reordered.map((c, idx) => ({
+                        id: c.id,
+                        position: (idx + 1) * 1000,
+                      }));
+                      reorderColumnsMutation.mutate(payload);
+                    }
+                  }
+                } else if (rawData) {
+                  const taskId = rawData.replace('task:', '');
+                  if (taskId) {
+                    handleMoveTask(taskId, column.id);
+                  }
                 }
               }}
             >
-              {/* Column Header */}
-              <div className={`kanban-col-header-bar ${colType}`}>
+              {/* Column Header (Draggable for reordering columns) */}
+              <div
+                className={`kanban-col-header-bar ${colType}`}
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData('text/plain', `column:${column.id}`);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                style={{ cursor: 'grab' }}
+                title="Kéo thả để thay đổi thứ tự cột"
+              >
                 <div className="kanban-col-title-group">
+                  <div className="kanban-col-drag-handle" title="Kéo thả để thay đổi thứ tự cột">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="9" cy="5" r="1" fill="currentColor"/>
+                      <circle cx="9" cy="12" r="1" fill="currentColor"/>
+                      <circle cx="9" cy="19" r="1" fill="currentColor"/>
+                      <circle cx="15" cy="5" r="1" fill="currentColor"/>
+                      <circle cx="15" cy="12" r="1" fill="currentColor"/>
+                      <circle cx="15" cy="19" r="1" fill="currentColor"/>
+                    </svg>
+                  </div>
                   <span className={`kanban-col-dot ${colType}`} />
 
                   {/* Inline Rename Column (6.3.2) */}
@@ -644,28 +676,6 @@ export function ProjectBoardPage() {
                 </div>
 
                 <div className="kanban-col-header-actions">
-                  {/* Reorder Columns Left / Right (6.3.2) */}
-                  {colIdx > 0 && (
-                    <button
-                      type="button"
-                      className="kanban-col-icon-btn"
-                      title="Di chuyển cột sang trái"
-                      onClick={() => handleMoveColumn(colIdx, 'left')}
-                    >
-                      ←
-                    </button>
-                  )}
-                  {colIdx < columns.length - 1 && (
-                    <button
-                      type="button"
-                      className="kanban-col-icon-btn"
-                      title="Di chuyển cột sang phải"
-                      onClick={() => handleMoveColumn(colIdx, 'right')}
-                    >
-                      →
-                    </button>
-                  )}
-
                   {/* Add Task to Column */}
                   <button
                     type="button"
@@ -723,7 +733,7 @@ export function ProjectBoardPage() {
                       isCompletedColumn={column.isCompleted}
                       onDeleteTask={(taskId) => deleteTaskMutation.mutate(taskId)}
                       onClick={() => {
-                        toast.info(`Nhiệm vụ: ${task.title}`);
+                        navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
                       }}
                     />
                   ))
@@ -783,58 +793,86 @@ export function ProjectBoardPage() {
       {/* Delete Column Transfer Modal (6.3.2) */}
       {deletingColumn && (
         <div className="modal-overlay" onClick={() => setDeletingColumn(null)}>
-          <div className="modal-content" style={{ maxWidth: '440px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Xóa cột "{deletingColumn.name}"</h2>
-              <button type="button" className="modal-close-btn" onClick={() => setDeletingColumn(null)}>
-                ×
+          <div className="delete-column-dialog" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="delete-column-header">
+              <div className="delete-column-header-left">
+                <div className="delete-column-icon-wrap">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="delete-column-title">Xóa cột "{deletingColumn.name}"</h3>
+                  <p className="delete-column-subtitle">Thao tác này sẽ xóa cột khỏi bảng Kanban</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="delete-column-close-btn"
+                onClick={() => setDeletingColumn(null)}
+                aria-label="Đóng"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Body */}
+            <div className="delete-column-body">
               {deletingColumn.tasks && deletingColumn.tasks.length > 0 ? (
-                <>
-                  <div style={{ padding: '12px', borderRadius: '8px', background: '#fffbe6', border: '1px solid #ffe58f', color: '#8c6b00', fontSize: '13.5px' }}>
-                    ⚠️ Cột <strong>{deletingColumn.name}</strong> đang chứa <strong>{deletingColumn.tasks.length}</strong> công việc. Bạn phải chọn 1 cột khác để di chuyển các công việc này trước khi xóa.
+                <div className="delete-column-warning-card">
+                  <div className="delete-column-warning-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
                   </div>
-
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontWeight: 600 }}>Cột đích chuyển giao:</label>
-                    <select
-                      className="form-select"
-                      value={transferTargetColumnId}
-                      onChange={(e) => setTransferTargetColumnId(e.target.value)}
-                    >
-                      <option value="">-- Chọn cột chuyển giao --</option>
-                      {otherColumnsForDelete.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.tasks.length} nhiệm vụ)
-                        </option>
-                      ))}
-                    </select>
+                  <div className="delete-column-warning-content">
+                    <span className="delete-column-warning-title">
+                      Cột đang chứa {deletingColumn.tasks.length} công việc
+                    </span>
+                    <p className="delete-column-warning-desc">
+                      Cột <strong>"{deletingColumn.name}"</strong> hiện đang chứa <strong>{deletingColumn.tasks.length}</strong> công việc. Thao tác này sẽ xóa cột và toàn bộ công việc bên trong khỏi bảng Kanban.
+                    </p>
                   </div>
-                </>
+                </div>
               ) : (
-                <p style={{ color: '#475569', fontSize: '14px', margin: 0 }}>
-                  Bạn có chắc chắn muốn xóa cột <strong>{deletingColumn.name}</strong>? Thao tác này không thể hoàn tất nếu không tạo lại cột.
-                </p>
+                <div className="delete-column-empty-card">
+                  <p style={{ color: '#475569', fontSize: '14px', margin: 0, lineHeight: 1.6 }}>
+                    Bạn có chắc chắn muốn xóa cột <strong>"{deletingColumn.name}"</strong>? Thao tác này không thể hoàn tất nếu không tạo lại cột.
+                  </p>
+                </div>
               )}
             </div>
 
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            {/* Footer */}
+            <div className="delete-column-footer">
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-cancel-delete"
                 onClick={() => setDeletingColumn(null)}
               >
                 Hủy bỏ
               </button>
               <button
                 type="button"
-                className="btn-primary"
-                style={{ background: '#dc2626', borderColor: '#dc2626' }}
+                className="btn-confirm-delete"
+                disabled={deleteColumnMutation.isPending}
                 onClick={handleConfirmDeleteColumn}
               >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
                 Xác nhận xóa
               </button>
             </div>
@@ -847,8 +885,12 @@ export function ProjectBoardPage() {
         projectId={currentProjectId}
         columns={columns}
         defaultColumnId={createDefaultColumnId}
+        members={project?.members}
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
+        onTaskCreated={(newTask) => {
+          navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${newTask.id}` : `/tasks/${newTask.id}`);
+        }}
       />
     </div>
   );

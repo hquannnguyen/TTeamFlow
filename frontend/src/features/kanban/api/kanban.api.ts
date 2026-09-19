@@ -124,3 +124,127 @@ export async function reorderColumns(
   return response.data.data;
 }
 
+export interface CommentItem {
+  id: string;
+  taskId: string;
+  authorId: string;
+  content: string;
+  createdAt: string;
+  author?: {
+    id: string;
+    fullName: string;
+    avatarUrl?: string | null;
+  };
+}
+
+export interface ChecklistItem {
+  id: string;
+  taskId: string;
+  content: string;
+  isDone: boolean;
+  position: number;
+}
+
+export interface ActivityLogItem {
+  id: string;
+  projectId: string;
+  actorId: string;
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+  actor?: {
+    id: string;
+    fullName: string;
+    avatarUrl?: string | null;
+  };
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  startDate?: string | null;
+  dueDate?: string | null;
+  assigneeIds?: string[];
+}
+
+export async function getTaskDetail(taskId: string) {
+  const response = await http.get<{ success: true; data: KanbanTask }>(
+    `/tasks/${taskId}`,
+  );
+  return response.data.data;
+}
+
+export async function updateTask(taskId: string, dto: UpdateTaskInput) {
+  const response = await http.patch<{ success: true; data: KanbanTask }>(
+    `/tasks/${taskId}`,
+    dto,
+  );
+  return response.data.data;
+}
+
+export async function getComments(taskId: string) {
+  const response = await http.get<{ success: true; data: CommentItem[] }>(
+    `/tasks/${taskId}/comments`,
+  );
+  return response.data.data;
+}
+
+export async function createComment(taskId: string, content: string) {
+  const response = await http.post<{ success: true; data: CommentItem }>(
+    `/tasks/${taskId}/comments`,
+    { content },
+  );
+  return response.data.data;
+}
+
+export async function deleteComment(commentId: string) {
+  const response = await http.delete<{ success: true; data: CommentItem }>(
+    `/comments/${commentId}`,
+  );
+  return response.data.data;
+}
+
+export async function getChecklists(taskId: string) {
+  const response = await http.get<{ success: true; data: ChecklistItem[] }>(
+    `/tasks/${taskId}/checklists`,
+  );
+  return response.data.data;
+}
+
+export async function createChecklistItem(taskId: string, content: string) {
+  const response = await http.post<{ success: true; data: ChecklistItem }>(
+    `/tasks/${taskId}/checklists`,
+    { content },
+  );
+  return response.data.data;
+}
+
+export async function updateChecklistItem(
+  id: string,
+  dto: { isDone?: boolean; content?: string },
+) {
+  const response = await http.patch<{ success: true; data: ChecklistItem }>(
+    `/checklists/${id}`,
+    dto,
+  );
+  return response.data.data;
+}
+
+export async function deleteChecklistItem(id: string) {
+  const response = await http.delete<{ success: true; data: ChecklistItem }>(
+    `/checklists/${id}`,
+  );
+  return response.data.data;
+}
+
+export async function getActivityLogs(projectId: string) {
+  const response = await http.get<{ success: true; data: ActivityLogItem[] }>(
+    `/projects/${projectId}/activity-logs`,
+  );
+  return response.data.data;
+}
+
+

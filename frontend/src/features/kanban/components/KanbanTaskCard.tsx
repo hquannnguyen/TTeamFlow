@@ -29,8 +29,14 @@ function formatDate(dateStr?: string | null) {
   if (!dateStr) return null;
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return null;
-  const day = d.getDate();
-  const month = d.getMonth() + 1;
+  const formatter = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: 'numeric',
+    month: 'numeric',
+  });
+  const parts = formatter.formatToParts(d);
+  const day = parts.find((p) => p.type === 'day')?.value;
+  const month = parts.find((p) => p.type === 'month')?.value;
   return `${day} Th${month}`;
 }
 
