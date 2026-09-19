@@ -6,6 +6,7 @@ import { logout as logoutApi } from '../../features/auth/api/auth.api';
 import { useAuthStore } from '../../features/auth/store/auth.store';
 import { ChangePasswordModal } from '../../features/profile/components/ChangePasswordModal';
 import { toast } from '../ui/toast.store';
+import { useActiveProjectStore } from '../../features/projects/store/active-project.store';
 
 function getInitials(name?: string) {
   if (!name) return '?';
@@ -16,6 +17,7 @@ function getInitials(name?: string) {
 
 export function AppLayout() {
   const { user, logout } = useAuthStore();
+  const { activeProjectId } = useActiveProjectStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -60,14 +62,19 @@ export function AppLayout() {
 
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname.includes('/dashboard');
   const isProjectsActive = location.pathname === '/projects';
-  const isBoardActive = location.pathname.includes('/board');
+  const isBoardActive = location.pathname.includes('/board') || location.pathname.includes('/kanban');
+  const isAdminActive = location.pathname.startsWith('/admin');
 
   return (
     <div className="app-shell">
       {/* ── Left Sidebar ── */}
       <aside className="sidebar">
         {/* Brand Logo */}
-        <Link to="/dashboard" className="sidebar-brand" title="Trang chủ Dashboard">
+        <Link
+          to={activeProjectId ? `/projects/${activeProjectId}/dashboard` : '/dashboard'}
+          className="sidebar-brand"
+          title="Trang chủ Dashboard"
+        >
           <img src={logo} alt="TTeamFlow" className="sidebar-logo-img" />
         </Link>
 
@@ -85,7 +92,7 @@ export function AppLayout() {
         {/* Navigation */}
         <nav className="sidebar-nav">
           <Link
-            to="/dashboard"
+            to={activeProjectId ? `/projects/${activeProjectId}/dashboard` : '/dashboard'}
             className={`sidebar-nav-item ${isDashboardActive ? 'active' : ''}`}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -108,7 +115,7 @@ export function AppLayout() {
           </Link>
 
           <Link
-            to="/board"
+            to={activeProjectId ? `/projects/${activeProjectId}/board` : '/board'}
             className={`sidebar-nav-item ${isBoardActive ? 'active' : ''}`}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -137,14 +144,19 @@ export function AppLayout() {
             <span>Nhật ký hoạt động</span>
           </div>
 
-          <div className="sidebar-nav-item">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            <span style={{ flex: 1 }}>Quản trị hệ thống</span>
-            <span className="sidebar-pro-badge">PRO</span>
-          </div>
+          {/* Menu Quản trị người dùng: Chỉ hiển thị với systemRole === 'ADMIN' */}
+          {user?.systemRole === 'ADMIN' && (
+            <Link
+              to="/admin/users"
+              className={`sidebar-nav-item ${isAdminActive ? 'active' : ''}`}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              <span style={{ flex: 1 }}>Quản trị người dùng</span>
+              <span className="sidebar-pro-badge" style={{ background: '#4338CA', color: '#fff' }}>ADMIN</span>
+            </Link>
+          )}
         </nav>
 
         {/* Favorite Projects Section */}
@@ -265,6 +277,21 @@ export function AppLayout() {
                     </svg>
                     <span>Profile</span>
                   </button>
+                  {user?.systemRole === 'ADMIN' && (
+                    <button
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        navigate('/admin/users');
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      <span>Quản trị người dùng</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="dropdown-item"

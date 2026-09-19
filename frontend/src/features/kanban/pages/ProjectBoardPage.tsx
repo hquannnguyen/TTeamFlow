@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -17,11 +17,13 @@ import { KanbanTaskCard } from '../components/KanbanTaskCard';
 import { CreateTaskModal } from '../components/CreateTaskModal';
 import { toast } from '../../../components/ui/toast.store';
 import { getMediaUrl } from '../../../api/http';
+import { useActiveProjectStore } from '../../projects/store/active-project.store';
 
 export function ProjectBoardPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { activeProjectId, setActiveProjectId } = useActiveProjectStore();
 
   // 1. Fetch user's projects to allow quick switching
   const { data: projects = [], isLoading: isLoadingProjects } = useQuery({
@@ -29,8 +31,30 @@ export function ProjectBoardPage() {
     queryFn: () => getProjects(),
   });
 
-  // Effective projectId: URL param or first available project
-  const currentProjectId = projectId || (projects.length > 0 ? projects[0].id : '');
+  // Effective projectId: URL param (if in projects) or activeProjectId (if in projects) or first available project
+  const currentProjectId = useMemo(() => {
+    if (projectId && projects.some((p) => p.id === projectId)) {
+      return projectId;
+    }
+    if (activeProjectId && projects.some((p) => p.id === activeProjectId)) {
+      return activeProjectId;
+    }
+    return projects.length > 0 ? projects[0].id : '';
+  }, [projectId, activeProjectId, projects]);
+
+  // Đồng bộ activeProjectId khi currentProjectId được xác định
+  useEffect(() => {
+    if (currentProjectId && currentProjectId !== activeProjectId) {
+      setActiveProjectId(currentProjectId);
+    }
+  }, [currentProjectId, activeProjectId, setActiveProjectId]);
+
+  // Cập nhật URL nếu đang ở /board hoặc /kanban nhưng đã có currentProjectId
+  useEffect(() => {
+    if (!projectId && currentProjectId) {
+      navigate(`/projects/${currentProjectId}/board`, { replace: true });
+    }
+  }, [projectId, currentProjectId, navigate]);
 
   // 2. Fetch active project details (name, key, members)
   const { data: project } = useQuery({
@@ -381,7 +405,11 @@ export function ProjectBoardPage() {
                     paddingRight: '8px',
                   }}
                   value={currentProjectId}
-                  onChange={(e) => navigate(`/projects/${e.target.value}/board`)}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setActiveProjectId(newId);
+                    navigate(`/projects/${newId}/board`);
+                  }}
                 >
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>

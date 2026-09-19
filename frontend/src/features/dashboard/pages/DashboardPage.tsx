@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getDashboardMetrics } from '../api/dashboard.api';
 import { DashboardStats } from '../components/DashboardStats';
 import { DashboardCharts } from '../components/DashboardCharts';
 import { getProjects } from '../../projects/api/projects.api';
+import { useActiveProjectStore } from '../../projects/store/active-project.store';
 
 export function DashboardPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [timeRange, setTimeRange] = useState('30_days');
+  const { activeProjectId, setActiveProjectId } = useActiveProjectStore();
 
   // Lấy danh sách dự án của người dùng
   const {
@@ -22,8 +24,33 @@ export function DashboardPage() {
     queryFn: () => getProjects(),
   });
 
-  // Chọn projectId: từ URL params hoặc dự án đầu tiên trong danh sách
-  const currentProjectId = projectId || (projects.length > 0 ? projects[0].id : '');
+  // Chọn projectId ưu tiên:
+  // 1. Param từ URL (nếu có trong danh sách projects)
+  // 2. activeProjectId từ store (nếu có trong danh sách projects)
+  // 3. Dự án đầu tiên trong projects
+  const currentProjectId = useMemo(() => {
+    if (projectId && projects.some((p) => p.id === projectId)) {
+      return projectId;
+    }
+    if (activeProjectId && projects.some((p) => p.id === activeProjectId)) {
+      return activeProjectId;
+    }
+    return projects.length > 0 ? projects[0].id : '';
+  }, [projectId, activeProjectId, projects]);
+
+  // Đồng bộ activeProjectId khi currentProjectId được xác định
+  useEffect(() => {
+    if (currentProjectId && currentProjectId !== activeProjectId) {
+      setActiveProjectId(currentProjectId);
+    }
+  }, [currentProjectId, activeProjectId, setActiveProjectId]);
+
+  // Cập nhật URL nếu đang ở /dashboard nhưng đã xác định currentProjectId
+  useEffect(() => {
+    if (!projectId && currentProjectId) {
+      navigate(`/projects/${currentProjectId}/dashboard`, { replace: true });
+    }
+  }, [projectId, currentProjectId, navigate]);
 
   // Lấy metrics qua TanStack Query theo chuẩn convention ['dashboard', projectId]
   const {
@@ -127,7 +154,11 @@ export function DashboardPage() {
               </svg>
               <select
                 value={currentProjectId}
-                onChange={(e) => navigate(`/projects/${e.target.value}/dashboard`)}
+                onChange={(e) => {
+                  const newId = e.target.value;
+                  setActiveProjectId(newId);
+                  navigate(`/projects/${newId}/dashboard`);
+                }}
                 className="date-select"
                 aria-label="Chọn dự án"
               >
@@ -200,7 +231,7 @@ export function DashboardPage() {
           <button
             className="btn-retry"
             style={{ padding: '6px 14px', fontSize: '12.5px', whiteSpace: 'nowrap' }}
-            onClick={() => navigate(`/projects/${currentProjectId}/kanban`)}
+            onClick={() => navigate(currentProjectId ? `/projects/${currentProjectId}/board` : '/board')}
           >
             Đến bảng Kanban →
           </button>

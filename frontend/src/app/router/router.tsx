@@ -9,6 +9,8 @@ import { DashboardPage } from '../../features/dashboard/pages/DashboardPage';
 import { ProfilePage } from '../../features/profile/pages/ProfilePage';
 
 import { TaskDetailPage } from '../../features/kanban/pages/TaskDetailPage';
+import { AdminRoute } from './AdminRoute';
+import { AdminUsersPage } from '../../features/admin/pages/AdminUsersPage';
 
 export const router = createBrowserRouter([
   {
@@ -33,7 +35,15 @@ export const router = createBrowserRouter([
             element: <ProjectBoardPage />,
           },
           {
+            path: '/kanban',
+            element: <ProjectBoardPage />,
+          },
+          {
             path: '/projects/:projectId/board',
+            element: <ProjectBoardPage />,
+          },
+          {
+            path: '/projects/:projectId/kanban',
             element: <ProjectBoardPage />,
           },
           {
@@ -51,6 +61,13 @@ export const router = createBrowserRouter([
           {
             path: '/profile',
             element: <ProfilePage />,
+          },
+          {
+            element: <AdminRoute />,
+            children: [
+              { path: '/admin', element: <Navigate to="/admin/users" replace /> },
+              { path: '/admin/users', element: <AdminUsersPage /> },
+            ],
           },
         ],
       },
