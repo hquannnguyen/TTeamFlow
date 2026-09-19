@@ -3366,3 +3366,452 @@ a { color: inherit; }
   }
 }
 
+/* ═════════════════════════════════════════════════════════════════
+   KANBAN BOARD STYLES (Google Stitch Design Integration)
+═════════════════════════════════════════════════════════════════ */
+.kanban-page-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* ── Kanban Header ── */
+.kanban-header-wrap {
+  padding: 20px 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.kanban-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.kanban-title-area {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kanban-project-title {
+  font-size: 22px;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.kanban-status-badge {
+  padding: 3px 10px;
+  background: #e2e8f0;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+}
+
+.kanban-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.kanban-avatar-group {
+  display: flex;
+  align-items: center;
+}
+
+.kanban-avatar-item {
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  margin-left: -8px;
+  object-cover: cover;
+  background: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+
+.kanban-avatar-item:first-child {
+  margin-left: 0;
+}
+
+.kanban-avatar-more {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.btn-invite-members {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2);
+  transition: background 0.15s ease;
+}
+
+.btn-invite-members:hover {
+  background: #4338ca;
+}
+
+.kanban-view-switcher {
+  display: flex;
+  background: #f1f5f9;
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.kanban-view-btn {
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s;
+}
+
+.kanban-view-btn.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* ── Filters Bar ── */
+.kanban-filters-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.kanban-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.kanban-filter-pill:hover,
+.kanban-filter-pill.active {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* ── Kanban Columns Area ── */
+.kanban-columns-scroll-area {
+  flex: 1;
+  overflow-x: auto;
+  padding: 24px;
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.kanban-column-card {
+  flex: 0 0 340px;
+  width: 340px;
+  background: rgba(241, 245, 249, 0.7);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 200px);
+}
+
+.kanban-col-header-bar {
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.kanban-col-header-bar.todo {
+  border-bottom-color: #cbd5e1;
+}
+
+.kanban-col-header-bar.doing {
+  border-bottom-color: #4f46e5;
+}
+
+.kanban-col-header-bar.done {
+  border-bottom-color: #10b981;
+}
+
+.kanban-col-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kanban-col-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+}
+
+.kanban-col-dot.todo { background: #94a3b8; }
+.kanban-col-dot.doing { background: #4f46e5; }
+.kanban-col-dot.done { background: #10b981; }
+
+.kanban-col-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.kanban-col-count-pill {
+  padding: 1px 7px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9999px;
+}
+
+.kanban-col-add-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all 0.15s;
+}
+
+.kanban-col-add-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.kanban-tasks-list-box {
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 100px;
+}
+
+/* ── Task Card (Stitch Exact Styling) ── */
+.stitch-task-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.stitch-task-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.stitch-card-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.stitch-task-key-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.stitch-task-key-tag.completed {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.stitch-priority-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.stitch-priority-badge.high,
+.stitch-priority-badge.urgent {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.stitch-priority-badge.medium {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.stitch-priority-badge.low {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.stitch-task-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 10px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.stitch-task-title.completed {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+/* Progress / Checklist in Card */
+.stitch-progress-section {
+  margin-bottom: 10px;
+}
+
+.stitch-progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.stitch-progress-track {
+  width: 100%;
+  height: 5px;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.stitch-progress-fill {
+  height: 100%;
+  background: #4f46e5;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+/* Bottom info in Card */
+.stitch-card-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.stitch-due-date-pill {
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.stitch-due-date-pill.urgent {
+  color: #dc2626;
+  background: #fef2f2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.stitch-due-date-pill.done {
+  color: #059669;
+  font-weight: 600;
+}
+
+.stitch-card-assignee-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  object-fit: cover;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Quick Move Buttons */
+.stitch-card-actions-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.stitch-quick-move-btn {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.stitch-quick-move-btn:hover {
+  background: #4f46e5;
+  color: #ffffff;
+  border-color: #4f46e5;
+}
+
