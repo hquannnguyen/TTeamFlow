@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -241,7 +241,7 @@ export function TaskDetailPage() {
     },
   });
 
-  const members = project?.members || [];
+  const members = useMemo(() => project?.members || [], [project?.members]);
   const assignedUsers = task?.assignments?.map((a) => a.user) || [];
   const assignedUserIds = new Set(assignedUsers.map((u) => u.id));
   const unassignedMembers = members.filter((m) => !assignedUserIds.has(m.user.id));
@@ -269,74 +269,76 @@ export function TaskDetailPage() {
   };
 
   // Helper to format activity action with detailed Vietnamese text
-  const formatActivityAction = (
-    log: { action: string; metadata?: Record<string, any> | null }
-  ): string => {
-    if (log.metadata?.description) {
-      return log.metadata.description;
-    }
-
-    switch (log.action) {
-      case 'TASK_CREATED':
-        return 'đã tạo nhiệm vụ này';
-
-      case 'TASK_COMPLETED':
-        return 'đã hoàn thành nhiệm vụ';
-
-      case 'TASK_MOVED': {
-        const toColName =
-          log.metadata?.toColumnName ||
-          columns.find((c) => c.id === log.metadata?.toColumnId)?.name;
-        return toColName
-          ? `đã chuyển nhiệm vụ sang cột "${toColName}"`
-          : 'đã chuyển nhiệm vụ sang cột khác';
+  const formatActivityAction = useCallback(
+    (log: { action: string; metadata?: Record<string, unknown> | null }): string => {
+      const meta = log.metadata;
+      if (typeof meta?.description === 'string') {
+        return meta.description;
       }
 
-      case 'TASK_ASSIGNED': {
-        const targetUserId = log.metadata?.assignedUserId;
-        const targetUser = members.find((m) => m.user.id === targetUserId);
-        const name = targetUser?.user.fullName || log.metadata?.assignedUserName;
-        return name ? `đã phân công nhiệm vụ cho ${name}` : 'đã phân công nhiệm vụ';
-      }
+      switch (log.action) {
+        case 'TASK_CREATED':
+          return 'đã tạo nhiệm vụ này';
 
-      case 'TASK_UNASSIGNED': {
-        const targetUserId = log.metadata?.unassignedUserId;
-        const targetUser = members.find((m) => m.user.id === targetUserId);
-        const name = targetUser?.user.fullName || log.metadata?.unassignedUserName;
-        return name ? `đã gỡ phân công của ${name}` : 'đã gỡ phân công nhiệm vụ';
-      }
+        case 'TASK_COMPLETED':
+          return 'đã hoàn thành nhiệm vụ';
 
-      case 'COMMENT_CREATED':
-        return 'đã gửi tin nhắn:';
-
-      case 'TASK_UPDATED': {
-        if (log.metadata) {
-          if (log.metadata.newDueDate !== undefined) {
-            return `đã thay đổi thời hạn sang ${formatDisplayDate(log.metadata.newDueDate)}`;
-          }
-          if (log.metadata.newPriority) {
-            const pMap: Record<string, string> = {
-              LOW: 'Thấp',
-              MEDIUM: 'Trung bình',
-              HIGH: 'Cao',
-              URGENT: 'Khẩn cấp',
-            };
-            return `đã thay đổi độ ưu tiên sang ${pMap[log.metadata.newPriority] || log.metadata.newPriority}`;
-          }
-          if (log.metadata.newTitle) {
-            return `đã thay đổi tiêu đề thành "${log.metadata.newTitle}"`;
-          }
-          if (log.metadata.changeType === 'DESCRIPTION') {
-            return 'đã cập nhật mô tả công việc';
-          }
+        case 'TASK_MOVED': {
+          const toColName =
+            (typeof meta?.toColumnName === 'string' ? meta.toColumnName : undefined) ||
+            columns.find((c) => c.id === meta?.toColumnId)?.name;
+          return toColName
+            ? `đã chuyển nhiệm vụ sang cột "${toColName}"`
+            : 'đã chuyển nhiệm vụ sang cột khác';
         }
-        return 'đã cập nhật thông tin nhiệm vụ';
-      }
 
-      default:
-        return 'đã cập nhật thông tin nhiệm vụ';
-    }
-  };
+        case 'TASK_ASSIGNED': {
+          const targetUserId = typeof meta?.assignedUserId === 'string' ? meta.assignedUserId : undefined;
+          const targetUser = members.find((m) => m.user.id === targetUserId);
+          const name = targetUser?.user.fullName || (typeof meta?.assignedUserName === 'string' ? meta.assignedUserName : undefined);
+          return name ? `đã phân công nhiệm vụ cho ${name}` : 'đã phân công nhiệm vụ';
+        }
+
+        case 'TASK_UNASSIGNED': {
+          const targetUserId = typeof meta?.unassignedUserId === 'string' ? meta.unassignedUserId : undefined;
+          const targetUser = members.find((m) => m.user.id === targetUserId);
+          const name = targetUser?.user.fullName || (typeof meta?.unassignedUserName === 'string' ? meta.unassignedUserName : undefined);
+          return name ? `đã gỡ phân công của ${name}` : 'đã gỡ phân công nhiệm vụ';
+        }
+
+        case 'COMMENT_CREATED':
+          return 'đã gửi tin nhắn:';
+
+        case 'TASK_UPDATED': {
+          if (meta) {
+            if (meta.newDueDate !== undefined) {
+              return `đã thay đổi thời hạn sang ${formatDisplayDate(meta.newDueDate as string | null)}`;
+            }
+            if (typeof meta.newPriority === 'string') {
+              const pMap: Record<string, string> = {
+                LOW: 'Thấp',
+                MEDIUM: 'Trung bình',
+                HIGH: 'Cao',
+                URGENT: 'Khẩn cấp',
+              };
+              return `đã thay đổi độ ưu tiên sang ${pMap[meta.newPriority] || meta.newPriority}`;
+            }
+            if (typeof meta.newTitle === 'string') {
+              return `đã thay đổi tiêu đề thành "${meta.newTitle}"`;
+            }
+            if (meta.changeType === 'DESCRIPTION') {
+              return 'đã cập nhật mô tả công việc';
+            }
+          }
+          return 'đã cập nhật thông tin nhiệm vụ';
+        }
+
+        default:
+          return 'đã cập nhật thông tin nhiệm vụ';
+      }
+    },
+    [columns, members],
+  );
 
   // Unified timeline combining activity logs and comments/messages
   const unifiedTimeline: TimelineItem[] = useMemo(() => {
@@ -380,7 +382,7 @@ export function TaskDetailPage() {
     return items.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-  }, [taskLogs, comments, columns, members]);
+  }, [taskLogs, comments, formatActivityAction]);
 
   if (isLoadingTask) {
     return (

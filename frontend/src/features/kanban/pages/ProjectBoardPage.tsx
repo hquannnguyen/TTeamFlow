@@ -70,7 +70,6 @@ export function ProjectBoardPage() {
   const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [editingColumnName, setEditingColumnName] = useState('');
   const [deletingColumn, setDeletingColumn] = useState<KanbanColumn | null>(null);
-  const [transferTargetColumnId, setTransferTargetColumnId] = useState<string>('');
 
   // Move Task Mutation (Task 17 API)
   const moveTaskMutation = useMutation({
@@ -174,14 +173,13 @@ export function ProjectBoardPage() {
     },
   });
 
-  // Delete Column Mutation (6.3.2 Delete with transfer)
+  // Delete Column Mutation (6.3.2 Delete)
   const deleteColumnMutation = useMutation({
-    mutationFn: ({ columnId, targetColumnId }: { columnId: string; targetColumnId?: string }) =>
-      deleteColumn(currentProjectId, columnId, targetColumnId),
+    mutationFn: ({ columnId }: { columnId: string }) =>
+      deleteColumn(currentProjectId, columnId),
     onSuccess: () => {
       toast.success('Xóa cột thành công');
       setDeletingColumn(null);
-      setTransferTargetColumnId('');
       queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
     },
     onError: (err: unknown) => {
@@ -224,23 +222,6 @@ export function ProjectBoardPage() {
       return;
     }
     updateColumnMutation.mutate({ columnId, name: editingColumnName.trim() });
-  };
-
-  const handleMoveColumn = (index: number, direction: 'left' | 'right') => {
-    const targetIndex = direction === 'left' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= columns.length) return;
-
-    const newCols = [...columns];
-    const temp = newCols[index];
-    newCols[index] = newCols[targetIndex];
-    newCols[targetIndex] = temp;
-
-    const reorderedItems = newCols.map((c, idx) => ({
-      id: c.id,
-      position: (idx + 1) * 1000,
-    }));
-
-    reorderColumnsMutation.mutate(reorderedItems);
   };
 
   const handleConfirmDeleteColumn = () => {
@@ -380,9 +361,6 @@ export function ProjectBoardPage() {
     );
   }
 
-  const otherColumnsForDelete = deletingColumn
-    ? columns.filter((c) => c.id !== deletingColumn.id)
-    : [];
 
   return (
     <div className="kanban-page-container">
@@ -568,7 +546,7 @@ export function ProjectBoardPage() {
 
       {/* ── Main Kanban Columns Section ── */}
       <div className="kanban-columns-scroll-area">
-        {filteredColumns.map((column, colIdx) => {
+        {filteredColumns.map((column) => {
           const colNameUpper = column.name.toUpperCase();
           const colType = column.isCompleted || colNameUpper.includes('DONE') || colNameUpper.includes('XONG')
             ? 'done'
@@ -699,7 +677,6 @@ export function ProjectBoardPage() {
                     title="Xóa cột này"
                     onClick={() => {
                       setDeletingColumn(column);
-                      setTransferTargetColumnId('');
                     }}
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
