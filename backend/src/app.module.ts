@@ -11,6 +11,7 @@ import { TasksModule } from "./modules/tasks/tasks.module";
 import { UsersModule } from "./modules/users/users.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { ChecklistsModule } from "./modules/checklists/checklists.module";
+import { CommentsModule } from "./modules/comments/comments.module";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { ChecklistsModule } from "./modules/checklists/checklists.module";
     DashboardModule,
     ActivityLogsModule,
     ChecklistsModule,
+    CommentsModule,
   ],
 })
 export class AppModule {}
