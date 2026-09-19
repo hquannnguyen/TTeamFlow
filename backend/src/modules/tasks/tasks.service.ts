@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { ProjectRole } from "@prisma/client";
+import { ProjectRole, ProjectStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { MoveTaskDto } from "./dto/move-task.dto";
@@ -96,9 +96,13 @@ export class TasksService {
   async move(taskId: string, actorId: string, dto: MoveTaskDto) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
-      include: { column: true },
+      include: { column: true, project: true },
     });
     if (!task) throw new NotFoundException("Task không tồn tại");
+
+    if (task.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException("Dự án đã lưu trữ, không thể chỉnh sửa");
+    }
 
     const member = await this.prisma.projectMember.findUnique({
       where: {
@@ -118,29 +122,74 @@ export class TasksService {
     });
     if (!target) throw new BadRequestException("Column đích không hợp lệ");
 
+    const nextCompletedAt = target.isCompleted
+      ? task.column.isCompleted
+        ? (task.completedAt ?? new Date())
+        : new Date()
+      : null;
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.task.update({
         where: { id: taskId },
         data: {
           columnId: target.id,
           position: dto.newPosition,
-          completedAt: target.isCompleted
-            ? (task.completedAt ?? new Date())
-            : null,
+          completedAt: nextCompletedAt,
+        },
+        include: {
+          column: true,
+          assignments: {
+            include: {
+              user: {
+                select: { id: true, fullName: true, avatarUrl: true },
+              },
+            },
+          },
         },
       });
 
+      // Kiểm tra và reorder lại các task trong column nếu có trùng lặp hoặc khoảng cách quá nhỏ
+      const columnTasks = await tx.task.findMany({
+        where: { columnId: target.id, deletedAt: null },
+        orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
+        select: { id: true, position: true },
+      });
+
+      let needsReorder = false;
+      for (let i = 0; i < columnTasks.length - 1; i++) {
+        if (columnTasks[i + 1].position - columnTasks[i].position < 1) {
+          needsReorder = true;
+          break;
+        }
+      }
+
+      if (needsReorder) {
+        for (let i = 0; i < columnTasks.length; i++) {
+          const normalizedPos = (i + 1) * 1000;
+          if (columnTasks[i].position !== normalizedPos) {
+            await tx.task.update({
+              where: { id: columnTasks[i].id },
+              data: { position: normalizedPos },
+            });
+            if (columnTasks[i].id === taskId) {
+              updated.position = normalizedPos;
+            }
+          }
+        }
+      }
+
+      const isNowCompleted = target.isCompleted && !task.column.isCompleted;
       await tx.activityLog.create({
         data: {
           projectId: task.projectId,
           actorId,
-          action: target.isCompleted ? "TASK_COMPLETED" : "TASK_MOVED",
+          action: isNowCompleted ? "TASK_COMPLETED" : "TASK_MOVED",
           entityType: "TASK",
           entityId: task.id,
           metadata: {
             fromColumnId: task.columnId,
             toColumnId: target.id,
-            newPosition: dto.newPosition,
+            newPosition: updated.position,
           },
         },
       });

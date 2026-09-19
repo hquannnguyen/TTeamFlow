@@ -12,6 +12,7 @@ import { UsersModule } from "./modules/users/users.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { ChecklistsModule } from "./modules/checklists/checklists.module";
 import { CommentsModule } from "./modules/comments/comments.module";
+import { AdminModule } from "./modules/admin/admin.module";
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { CommentsModule } from "./modules/comments/comments.module";
     ActivityLogsModule,
     ChecklistsModule,
     CommentsModule,
+    AdminModule,
   ],
 })
 export class AppModule {}
