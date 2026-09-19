@@ -141,7 +141,8 @@ export interface ChecklistItem {
   id: string;
   taskId: string;
   content: string;
-  isDone: boolean;
+  isCompleted: boolean;
+  isDone?: boolean;
   position: number;
 }
 
@@ -224,11 +225,17 @@ export async function createChecklistItem(taskId: string, content: string) {
 
 export async function updateChecklistItem(
   id: string,
-  dto: { isDone?: boolean; content?: string },
+  dto: { isCompleted?: boolean; isDone?: boolean; content?: string },
 ) {
+  const isCompletedVal =
+    dto.isCompleted !== undefined ? dto.isCompleted : dto.isDone;
+  const payload: { isCompleted?: boolean; content?: string } = {};
+  if (isCompletedVal !== undefined) payload.isCompleted = isCompletedVal;
+  if (dto.content !== undefined) payload.content = dto.content;
+
   const response = await http.patch<{ success: true; data: ChecklistItem }>(
     `/checklists/${id}`,
-    dto,
+    payload,
   );
   return response.data.data;
 }
