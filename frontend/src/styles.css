@@ -3724,6 +3724,69 @@ a { color: inherit; }
   margin-bottom: 8px;
 }
 
+.stitch-card-menu-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+  transition: all 0.15s ease;
+  letter-spacing: 1px;
+}
+
+.stitch-card-menu-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.stitch-card-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  z-index: 25;
+  min-width: 140px;
+  padding: 4px;
+}
+
+.stitch-card-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #475569;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stitch-card-dropdown-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.stitch-card-dropdown-item.text-danger {
+  color: #dc2626;
+}
+
+.stitch-card-dropdown-item.text-danger:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .stitch-task-key-tag {
   font-size: 11px;
   font-weight: 600;

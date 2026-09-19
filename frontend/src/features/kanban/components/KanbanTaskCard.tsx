@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { KanbanTask } from '../api/kanban.api';
 import { getMediaUrl } from '../../../api/http';
 
@@ -6,10 +6,8 @@ interface KanbanTaskCardProps {
   task: KanbanTask;
   projectKey?: string;
   isCompletedColumn?: boolean;
-  onMoveToColumn?: (targetColumnId: string) => void;
-  availableColumns?: Array<{ id: string; name: string }>;
-  currentColumnId?: string;
   onClick?: () => void;
+  onDeleteTask?: (taskId: string) => void;
   onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDragEnd?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
@@ -53,14 +51,14 @@ export function KanbanTaskCard({
   task,
   projectKey = 'TTF',
   isCompletedColumn = false,
-  onMoveToColumn,
-  availableColumns = [],
-  currentColumnId,
   onClick,
+  onDeleteTask,
   onDragStart,
   onDragEnd,
 }: KanbanTaskCardProps) {
-  const [isDragging, setIsDragging] = React.useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
   const priorityInfo = getPriorityLabel(task.priority);
   const formattedDueDate = formatDate(task.dueDate);
   const overdue = isOverdue(task.dueDate, isCompletedColumn || Boolean(task.completedAt));
@@ -76,11 +74,6 @@ export function KanbanTaskCard({
   // Checklists or comment counts
   const checklistTotal = task._count?.checklistItems ?? 0;
   const hasProgress = checklistTotal > 0;
-
-  // Next and Previous columns for quick navigation
-  const currentIndex = availableColumns.findIndex((c) => c.id === currentColumnId);
-  const prevColumn = currentIndex > 0 ? availableColumns[currentIndex - 1] : null;
-  const nextColumn = currentIndex >= 0 && currentIndex < availableColumns.length - 1 ? availableColumns[currentIndex + 1] : null;
 
   return (
     <div
@@ -99,14 +92,43 @@ export function KanbanTaskCard({
       }}
       onClick={onClick}
     >
-      {/* Top Row: Task Key & Priority */}
+      {/* Top Row: Task Key & Three-dots Menu */}
       <div className="stitch-card-top-row">
         <span className={`stitch-task-key-tag ${isDone ? 'completed' : ''}`}>
           {taskCode}
         </span>
-        <span className={`stitch-priority-badge ${priorityInfo.className}`}>
-          {priorityInfo.text}
-        </span>
+
+        {/* Three dots menu button */}
+        <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className="stitch-card-menu-btn"
+            onClick={() => setShowMenu((prev) => !prev)}
+            title="Tùy chọn nhiệm vụ"
+          >
+            •••
+          </button>
+
+          {showMenu && (
+            <div className="stitch-card-dropdown-menu">
+              <button
+                type="button"
+                className="stitch-card-dropdown-item text-danger"
+                onClick={() => {
+                  setShowMenu(false);
+                  onDeleteTask?.(task.id);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+                <span>Xóa nhiệm vụ</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Title */}
@@ -130,7 +152,7 @@ export function KanbanTaskCard({
         </div>
       )}
 
-      {/* Bottom Row: Due Date or Done status + Assignee */}
+      {/* Bottom Row: Due Date + Priority Badge + Assignee Avatar */}
       <div className="stitch-card-bottom-row">
         {isDone ? (
           <span className="stitch-due-date-pill done">
@@ -159,58 +181,36 @@ export function KanbanTaskCard({
           </span>
         )}
 
-        {/* Assignee Avatar */}
-        {firstAssignee ? (
-          avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt={firstAssignee.fullName}
-              className="stitch-card-assignee-avatar"
-              title={firstAssignee.fullName}
-            />
-          ) : (
-            <div
-              className="stitch-card-assignee-avatar"
-              title={firstAssignee.fullName}
-            >
-              {getInitials(firstAssignee.fullName)}
-            </div>
-          )
-        ) : (
-          <div className="stitch-card-assignee-avatar" title="Chưa phân công">
-            ?
-          </div>
-        )}
-      </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Priority label moved to bottom row */}
+          <span className={`stitch-priority-badge ${priorityInfo.className}`}>
+            {priorityInfo.text}
+          </span>
 
-      {/* Quick Move Row */}
-      {onMoveToColumn && (prevColumn || nextColumn) && (
-        <div
-          className="stitch-card-actions-row"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {prevColumn && (
-            <button
-              type="button"
-              className="stitch-quick-move-btn"
-              onClick={() => onMoveToColumn(prevColumn.id)}
-              title={`Chuyển về "${prevColumn.name}"`}
-            >
-              ← {prevColumn.name}
-            </button>
-          )}
-          {nextColumn && (
-            <button
-              type="button"
-              className="stitch-quick-move-btn"
-              onClick={() => onMoveToColumn(nextColumn.id)}
-              title={`Chuyển sang "${nextColumn.name}"`}
-            >
-              {nextColumn.name} →
-            </button>
+          {/* Assignee Avatar */}
+          {firstAssignee ? (
+            avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={firstAssignee.fullName}
+                className="stitch-card-assignee-avatar"
+                title={firstAssignee.fullName}
+              />
+            ) : (
+              <div
+                className="stitch-card-assignee-avatar"
+                title={firstAssignee.fullName}
+              >
+                {getInitials(firstAssignee.fullName)}
+              </div>
+            )
+          ) : (
+            <div className="stitch-card-assignee-avatar" title="Chưa phân công">
+              ?
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

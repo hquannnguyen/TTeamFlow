@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getBoard,
   moveTask,
+  deleteTask,
   createColumn,
   updateColumn,
   deleteColumn,
@@ -126,6 +127,20 @@ export function ProjectBoardPage() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
       queryClient.invalidateQueries({ queryKey: ['dashboard', currentProjectId] });
+    },
+  });
+
+  // Delete Task Mutation
+  const deleteTaskMutation = useMutation({
+    mutationFn: (taskId: string) => deleteTask(taskId),
+    onSuccess: () => {
+      toast.success('Xóa nhiệm vụ thành công');
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể xóa nhiệm vụ';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
     },
   });
 
@@ -706,9 +721,7 @@ export function ProjectBoardPage() {
                       task={task}
                       projectKey={project?.projectKey || 'TTF'}
                       isCompletedColumn={column.isCompleted}
-                      currentColumnId={column.id}
-                      availableColumns={columns.map((c) => ({ id: c.id, name: c.name }))}
-                      onMoveToColumn={(targetColId) => handleMoveTask(task.id, targetColId)}
+                      onDeleteTask={(taskId) => deleteTaskMutation.mutate(taskId)}
                       onClick={() => {
                         toast.info(`Nhiệm vụ: ${task.title}`);
                       }}
