@@ -19,7 +19,8 @@
     "test:activity-logs": "tsx test/activity-logs.spec.ts",
     "test:members": "tsx test/members.spec.ts",
     "test:admin": "tsx test/admin.spec.ts",
-    "test:all": "tsx test/guards.spec.ts && tsx test/kanban-reorder.spec.ts && tsx test/activity-logs.spec.ts && tsx test/members.spec.ts && tsx test/admin.spec.ts"
+    "test:dashboard": "tsx test/dashboard.spec.ts",
+    "test:all": "tsx test/guards.spec.ts && tsx test/kanban-reorder.spec.ts && tsx test/activity-logs.spec.ts && tsx test/members.spec.ts && tsx test/admin.spec.ts && tsx test/dashboard.spec.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
