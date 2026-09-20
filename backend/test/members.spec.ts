@@ -7,7 +7,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { ProjectRole } from "@prisma/client";
+import { ProjectRole, ProjectStatus } from "@prisma/client";
 import { PROJECT_ROLES_KEY } from "../src/common/decorators/project-roles.decorator";
 import { ProjectMembersController } from "../src/modules/project-members/project-members.controller";
 import { ProjectMembersService } from "../src/modules/project-members/project-members.service";
@@ -17,10 +17,27 @@ async function runTests() {
   console.log("🚀 Bắt đầu kiểm thử Project Members (Task 14)...\n");
 
   const projectId = "proj-1111-1111-1111-111111111111";
+  const archivedProjectId = "proj-archived-9999";
   const ownerId = "user-owner-1111";
   const managerId = "user-manager-2222";
   const memberId = "user-member-3333";
   const newUserId = "user-new-4444";
+
+  const mockProjects: Record<
+    string,
+    { id: string; status: ProjectStatus; deletedAt: Date | null }
+  > = {
+    [projectId]: {
+      id: projectId,
+      status: ProjectStatus.ACTIVE,
+      deletedAt: null,
+    },
+    [archivedProjectId]: {
+      id: archivedProjectId,
+      status: ProjectStatus.ARCHIVED,
+      deletedAt: null,
+    },
+  };
 
   // Mock in-memory state
   const mockUsers: Record<
@@ -111,6 +128,11 @@ async function runTests() {
   const loggedActivities: any[] = [];
 
   const mockPrisma = {
+    project: {
+      findUnique: async ({ where }: any) => {
+        return mockProjects[where.id] || null;
+      },
+    },
     user: {
       findUnique: async ({ where }: any) => {
         if (where.email) {
@@ -476,7 +498,34 @@ async function runTests() {
     "✅ TC-12 Pass: Controller endpoints được bảo vệ chặt chẽ bởi @ProjectRoles",
   );
 
-  console.log("\n🎉 TẤT CẢ 12 TEST CASES CỦA TASK 14 ĐÃ PASS 100%!");
+  // =========================================================================
+  // TC-13: Chặn thêm thành viên vào dự án đã lưu trữ (ARCHIVED) hoặc không tồn tại
+  // =========================================================================
+  console.log("--- TC-13: Chặn thêm thành viên vào dự án đã lưu trữ (ARCHIVED) ---");
+  await assert.rejects(
+    async () => {
+      await service.add(archivedProjectId, ownerId, {
+        email: "newuser@example.com",
+        role: ProjectRole.MEMBER,
+      });
+    },
+    (err: unknown) => err instanceof BadRequestException,
+    "Phải ném BadRequestException khi thêm thành viên vào dự án ARCHIVED",
+  );
+
+  await assert.rejects(
+    async () => {
+      await service.add("non-existent-proj", ownerId, {
+        email: "newuser@example.com",
+        role: ProjectRole.MEMBER,
+      });
+    },
+    (err: unknown) => err instanceof NotFoundException,
+    "Phải ném NotFoundException khi thêm thành viên vào dự án không tồn tại",
+  );
+  console.log("✅ TC-13 Pass: Chặn thêm thành viên vào dự án ARCHIVED hoặc không tồn tại");
+
+  console.log("\n🎉 TẤT CẢ 13 TEST CASES CỦA TASK 14 ĐÃ PASS 100%!");
 }
 
 runTests().catch((err) => {
