@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getMediaUrl } from '../../../api/http';
 import { toast } from '../../../components/ui/toast.store';
 import {
