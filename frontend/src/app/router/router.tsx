@@ -7,6 +7,7 @@ import { ProjectsPage } from '../../features/projects/pages/ProjectsPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { DashboardPage } from '../../features/dashboard/pages/DashboardPage';
 import { ProfilePage } from '../../features/profile/pages/ProfilePage';
+import { ProjectMembersPage } from '../../features/members/pages/ProjectMembersPage';
 
 import { TaskDetailPage } from '../../features/kanban/pages/TaskDetailPage';
 import { AdminRoute } from './AdminRoute';
@@ -61,6 +62,14 @@ export const router = createBrowserRouter([
           {
             path: '/profile',
             element: <ProfilePage />,
+          },
+          {
+            path: '/members',
+            element: <ProjectMembersPage />,
+          },
+          {
+            path: '/projects/:projectId/members',
+            element: <ProjectMembersPage />,
           },
           {
             element: <AdminRoute />,

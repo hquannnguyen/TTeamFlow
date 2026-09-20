@@ -63,6 +63,7 @@ export function AppLayout() {
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname.includes('/dashboard');
   const isProjectsActive = location.pathname === '/projects';
   const isBoardActive = location.pathname.includes('/board') || location.pathname.includes('/kanban');
+  const isMembersActive = location.pathname.includes('/members');
   const isAdminActive = location.pathname.startsWith('/admin');
 
   return (
@@ -126,7 +127,10 @@ export function AppLayout() {
             <span>Bảng Kanban</span>
           </Link>
 
-          <div className="sidebar-nav-item">
+          <Link
+            to={activeProjectId ? `/projects/${activeProjectId}/members` : '/members'}
+            className={`sidebar-nav-item ${isMembersActive ? 'active' : ''}`}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
               <circle cx="9" cy="7" r="4" />
@@ -134,7 +138,7 @@ export function AppLayout() {
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
             <span>Thành viên</span>
-          </div>
+          </Link>
 
           <div className="sidebar-nav-item">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
