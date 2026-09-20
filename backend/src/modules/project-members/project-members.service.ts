@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { ProjectRole } from "@prisma/client";
+import { ProjectRole, ProjectStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AddProjectMemberDto } from "./dto/add-project-member.dto";
 import { UpdateProjectMemberRoleDto } from "./dto/update-project-member-role.dto";
@@ -43,6 +43,19 @@ export class ProjectMembersService {
   }
 
   async add(projectId: string, actorId: string, dto: AddProjectMemberDto) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true, status: true, deletedAt: true },
+    });
+    if (!project || project.deletedAt) {
+      throw new NotFoundException("Không tìm thấy dự án");
+    }
+    if (project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Không thể thêm thành viên vào dự án đã lưu trữ",
+      );
+    }
+
     if (dto.role === ProjectRole.OWNER) {
       throw new BadRequestException("Không thể thêm OWNER bằng endpoint này");
     }

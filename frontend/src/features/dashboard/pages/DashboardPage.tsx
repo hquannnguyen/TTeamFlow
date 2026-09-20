@@ -6,6 +6,7 @@ import { DashboardStats } from '../components/DashboardStats';
 import { DashboardCharts } from '../components/DashboardCharts';
 import { getProjects } from '../../projects/api/projects.api';
 import { useActiveProjectStore } from '../../projects/store/active-project.store';
+import { ProjectSelectDropdown } from '../../projects/components/ProjectSelectDropdown';
 
 export function DashboardPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -148,30 +149,15 @@ export function DashboardPage() {
 
         <div className="dashboard-action-group">
           {projects.length > 0 && (
-            <div className="date-filter-dropdown" style={{ minWidth: 160 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-              </svg>
-              <select
-                value={currentProjectId}
-                onChange={(e) => {
-                  const newId = e.target.value;
-                  setActiveProjectId(newId);
-                  navigate(`/projects/${newId}/dashboard`);
-                }}
-                className="date-select"
-                aria-label="Chọn dự án"
-              >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <svg className="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </div>
+            <ProjectSelectDropdown
+              projects={projects}
+              currentProjectId={currentProjectId}
+              onSelectProject={(selectedId) => {
+                setActiveProjectId(selectedId);
+                navigate(`/projects/${selectedId}/dashboard`);
+              }}
+              variant="compact"
+            />
           )}
 
           <div className="date-filter-dropdown">

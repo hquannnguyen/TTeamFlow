@@ -13,8 +13,12 @@ import {
   type KanbanColumn,
 } from '../api/kanban.api';
 import { getProjects, getProject } from '../../projects/api/projects.api';
+import { ProjectSelectDropdown } from '../../projects/components/ProjectSelectDropdown';
 import { KanbanTaskCard } from '../components/KanbanTaskCard';
 import { CreateTaskModal } from '../components/CreateTaskModal';
+import { KanbanListView } from '../components/KanbanListView';
+import { AddMemberModal } from '../../members/components/AddMemberModal';
+import { useAuthStore } from '../../auth/store/auth.store';
 import { toast } from '../../../components/ui/toast.store';
 import { getMediaUrl } from '../../../api/http';
 import { useActiveProjectStore } from '../../projects/store/active-project.store';
@@ -84,6 +88,19 @@ export function ProjectBoardPage() {
   // Modals state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createDefaultColumnId, setCreateDefaultColumnId] = useState<string>('');
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
+  // Current user & RBAC permission to invite members
+  const currentUser = useAuthStore((s) => s.user);
+  const canInviteMembers = useMemo(() => {
+    if (!currentUser) return false;
+    if (currentUser.systemRole === 'ADMIN') return true;
+    if (!project?.members) return false;
+    const myMembership = project.members.find(
+      (m) => m.user?.id === currentUser.id,
+    );
+    return myMembership?.role === 'OWNER' || myMembership?.role === 'MANAGER';
+  }, [currentUser, project]);
 
   // Drag & drop drop target state
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
@@ -393,40 +410,17 @@ export function ProjectBoardPage() {
         <div className="kanban-header-top">
           {/* Title & Status Area */}
           <div className="kanban-title-area">
-            {projects.length > 1 ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <select
-                  className="kanban-project-title"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    paddingRight: '8px',
-                  }}
-                  value={currentProjectId}
-                  onChange={(e) => {
-                    const newId = e.target.value;
-                    setActiveProjectId(newId);
-                    navigate(`/projects/${newId}/board`);
-                  }}
-                >
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <h1 className="kanban-project-title">
-                {project?.name || 'Giai đoạn phát triển 4'}
-              </h1>
-            )}
-
-            <span className="kanban-status-badge">
-              {project?.status === 'ARCHIVED' ? 'Đã lưu trữ' : 'Đang hoạt động'}
-            </span>
+            <ProjectSelectDropdown
+              projects={projects}
+              currentProjectId={currentProjectId}
+              onSelectProject={(selectedId) => {
+                setActiveProjectId(selectedId);
+                navigate(`/projects/${selectedId}/board`);
+              }}
+              variant="title"
+              status={project?.status}
+              showStatusBadge={true}
+            />
           </div>
 
           {/* Right Header Controls */}
@@ -464,14 +458,17 @@ export function ProjectBoardPage() {
               )}
             </div>
 
-            {/* Invite Button */}
-            <button
-              type="button"
-              className="btn-invite-members"
-              onClick={() => toast.info('Mở hộp thoại mời thành viên vào dự án')}
-            >
-              Mời
-            </button>
+            {/* Invite Button - only for OWNER / MANAGER / ADMIN */}
+            {canInviteMembers && (
+              <button
+                type="button"
+                className="btn-invite-members"
+                onClick={() => setIsInviteModalOpen(true)}
+                title="Mời thành viên mới vào dự án"
+              >
+                + Mời
+              </button>
+            )}
 
             {/* View Switcher: Board vs List */}
             <div className="kanban-view-switcher">
@@ -503,77 +500,84 @@ export function ProjectBoardPage() {
                 </svg>
               </button>
             </div>
-
-            {/* Add Task Button */}
-            <button
-              type="button"
-              className="btn-primary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 14px',
-                fontSize: '13px',
-              }}
-              onClick={() => {
-                setCreateDefaultColumnId(columns[0]?.id || '');
-                setIsCreateModalOpen(true);
-              }}
-            >
-              + Tạo công việc
-            </button>
           </div>
         </div>
 
         {/* Filters Bar (Matching Stitch Design) */}
         <div className="kanban-filters-bar">
-          <select
-            className="kanban-filter-pill"
-            value={selectedAssignee}
-            onChange={(e) => setSelectedAssignee(e.target.value)}
-          >
-            <option value="ALL">Người thực hiện: Tất cả</option>
-            {project?.members?.map((m) => (
-              <option key={m.user.id} value={m.user.id}>
-                {m.user.fullName}
-              </option>
-            ))}
-          </select>
+          <div className="kanban-filters-left">
+            <select
+              className="kanban-filter-pill"
+              value={selectedAssignee}
+              onChange={(e) => setSelectedAssignee(e.target.value)}
+            >
+              <option value="ALL">Người thực hiện: Tất cả</option>
+              {project?.members?.map((m) => (
+                <option key={m.user.id} value={m.user.id}>
+                  {m.user.fullName}
+                </option>
+              ))}
+            </select>
 
-          <select
-            className="kanban-filter-pill"
-            value={selectedPriority}
-            onChange={(e) => setSelectedPriority(e.target.value)}
-          >
-            <option value="ALL">Độ ưu tiên: Tất cả</option>
-            <option value="HIGH">Cao / Khẩn cấp</option>
-            <option value="MEDIUM">Trung bình</option>
-            <option value="LOW">Thấp</option>
-          </select>
+            <select
+              className="kanban-filter-pill"
+              value={selectedPriority}
+              onChange={(e) => setSelectedPriority(e.target.value)}
+            >
+              <option value="ALL">Độ ưu tiên: Tất cả</option>
+              <option value="HIGH">Cao / Khẩn cấp</option>
+              <option value="MEDIUM">Trung bình</option>
+              <option value="LOW">Thấp</option>
+            </select>
 
-          <button
-            type="button"
-            className={`kanban-filter-pill ${onlyOverdue ? 'active' : ''}`}
-            onClick={() => setOnlyOverdue(!onlyOverdue)}
-          >
-            Quá hạn {onlyOverdue ? '✓' : ''}
-          </button>
+            <button
+              type="button"
+              className={`kanban-filter-pill ${onlyOverdue ? 'active' : ''}`}
+              onClick={() => setOnlyOverdue(!onlyOverdue)}
+            >
+              Quá hạn {onlyOverdue ? '✓' : ''}
+            </button>
+          </div>
 
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <div className="kanban-search-wrap">
+            <svg
+              className="kanban-search-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
             <input
               type="text"
-              className="kanban-filter-pill"
-              style={{ width: '200px', cursor: 'text' }}
+              className="kanban-search-input"
               placeholder="Tìm theo tên hoặc mã..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                className="kanban-search-clear-btn"
+                onClick={() => setSearchQuery('')}
+                title="Xóa tìm kiếm"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── Main Kanban Columns Section ── */}
-      <div className="kanban-columns-scroll-area">
+      {/* ── Main Content: Kanban Board vs List View ── */}
+      {viewMode === 'board' ? (
+        <div className="kanban-columns-scroll-area">
         {filteredColumns.map((column) => {
           const colNameUpper = column.name.toUpperCase();
           const colType = column.isCompleted || colNameUpper.includes('DONE') || colNameUpper.includes('XONG')
@@ -794,6 +798,30 @@ export function ProjectBoardPage() {
           </div>
         )}
       </div>
+    ) : (
+      <KanbanListView
+        columns={filteredColumns}
+        allColumns={columns}
+        projectKey={project?.projectKey || 'TTF'}
+        onTaskClick={(task) => {
+          navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
+        }}
+        onMoveTask={(taskId, targetColumnId) => {
+          moveTaskMutation.mutate({
+            taskId,
+            targetColumnId,
+            newPosition: 1000,
+          });
+        }}
+        onDeleteTask={(taskId) => {
+          deleteTaskMutation.mutate(taskId);
+        }}
+        onAddTask={(columnId) => {
+          setCreateDefaultColumnId(columnId);
+          setIsCreateModalOpen(true);
+        }}
+      />
+    )}
 
       {/* Delete Column Transfer Modal (6.3.2) */}
       {deletingColumn && (
@@ -897,6 +925,20 @@ export function ProjectBoardPage() {
           navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${newTask.id}` : `/tasks/${newTask.id}`);
         }}
       />
+
+      {/* Add / Invite Member Modal */}
+      {currentProjectId && (
+        <AddMemberModal
+          isOpen={isInviteModalOpen}
+          onClose={() => setIsInviteModalOpen(false)}
+          projectId={currentProjectId}
+          projectName={project?.name}
+          onMemberAdded={() => {
+            queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+          }}
+        />
+      )}
     </div>
   );
 }

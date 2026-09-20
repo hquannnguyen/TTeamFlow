@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Patch,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from "@nestjs/common";
@@ -16,6 +17,15 @@ import { UsersService } from "./users.service";
 @Controller("users")
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get("search")
+  search(
+    @CurrentUser() user: AuthUser,
+    @Query("q") q?: string,
+    @Query("projectId") projectId?: string,
+  ) {
+    return this.usersService.search(q, projectId, user.id);
+  }
 
   @Get("me")
   me(@CurrentUser() user: AuthUser) {

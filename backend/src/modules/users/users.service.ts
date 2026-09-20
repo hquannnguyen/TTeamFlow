@@ -114,4 +114,43 @@ export class UsersService {
 
     return updated;
   }
+
+  async search(q?: string, projectId?: string, currentUserId?: string) {
+    const keyword = (q || "").trim();
+    if (!keyword) {
+      return [];
+    }
+
+    let existingMemberIds = new Set<string>();
+    if (projectId) {
+      const members = await this.prisma.projectMember.findMany({
+        where: { projectId },
+        select: { userId: true },
+      });
+      existingMemberIds = new Set(members.map((m) => m.userId));
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { email: { contains: keyword, mode: "insensitive" } },
+          { fullName: { contains: keyword, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        avatarUrl: true,
+      },
+      take: 10,
+    });
+
+    return users.map((u) => ({
+      ...u,
+      isMember: existingMemberIds.has(u.id),
+      isSelf: u.id === currentUserId,
+    }));
+  }
 }
