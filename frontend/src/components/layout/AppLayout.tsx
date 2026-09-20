@@ -164,28 +164,8 @@ export function AppLayout() {
       {/* ── Main Wrapper (Header + Content) ── */}
       <div className="main-wrapper">
         {/* Top Header Bar */}
-        <header className="top-header">
-          <div className="top-search-box">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Tìm kiếm nhiệm vụ, dự án, thành viên... (Cmd + K)"
-              className="top-search-input"
-            />
-            <kbd className="top-search-kbd">⌘K</kbd>
-          </div>
-
+        <header className="top-header" style={{ justifyContent: 'flex-end' }}>
           <div className="top-header-actions">
-            <button className="btn-create-task" type="button">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>Tạo nhiệm vụ</span>
-            </button>
 
             <button className="top-icon-btn" title="Trợ giúp" type="button">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
