@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import logo from '../../assets/logo.png';
 import { getMediaUrl } from '../../api/http';
 import { logout as logoutApi } from '../../features/auth/api/auth.api';
@@ -7,6 +8,8 @@ import { useAuthStore } from '../../features/auth/store/auth.store';
 import { ChangePasswordModal } from '../../features/profile/components/ChangePasswordModal';
 import { toast } from '../ui/toast.store';
 import { useActiveProjectStore } from '../../features/projects/store/active-project.store';
+import { getProjects } from '../../features/projects/api/projects.api';
+import { getProjectTheme } from '../../features/projects/utils/project-theme.util';
 
 function getInitials(name?: string) {
   if (!name) return '?';
@@ -17,13 +20,33 @@ function getInitials(name?: string) {
 
 export function AppLayout() {
   const { user, logout } = useAuthStore();
-  const { activeProjectId } = useActiveProjectStore();
+  const { activeProjectId, setActiveProjectId } = useActiveProjectStore();
   const navigate = useNavigate();
   const location = useLocation();
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Lấy danh sách dự án gần đây của người dùng
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => getProjects(),
+  });
+
+  const recentProjects = useMemo(() => {
+    return [...projects]
+      .filter((p) => p.status !== 'ARCHIVED')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 5);
+  }, [projects]);
+
+  const archivedProjects = useMemo(() => {
+    return [...projects]
+      .filter((p) => p.status === 'ARCHIVED')
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, 5);
+  }, [projects]);
 
   const avatarUrl = getMediaUrl(user?.avatarUrl);
 
@@ -78,17 +101,6 @@ export function AppLayout() {
         >
           <img src={logo} alt="TTeamFlow" className="sidebar-logo-img" />
         </Link>
-
-        {/* Workspace Selector */}
-        <div className="workspace-box">
-          <span className="workspace-label">KHÔNG GIAN LÀM VIỆC</span>
-          <div className="workspace-dropdown">
-            <span className="workspace-name">Acme Global</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </div>
-        </div>
 
         {/* Navigation */}
         <nav className="sidebar-nav">
@@ -163,17 +175,65 @@ export function AppLayout() {
           )}
         </nav>
 
-        {/* Favorite Projects Section */}
+        {/* Recent Projects Section */}
         <div className="sidebar-section">
-          <span className="sidebar-section-title">DỰ ÁN YÊU THÍCH</span>
-          <div className="sidebar-fav-item">
-            <span className="fav-dot green"></span>
-            <span>TTeamFlow Web</span>
-          </div>
-          <div className="sidebar-fav-item">
-            <span className="fav-dot purple"></span>
-            <span>Mobile Refactor</span>
-          </div>
+          <span className="sidebar-section-title">DỰ ÁN GẦN ĐÂY</span>
+          {recentProjects.length > 0 ? (
+            recentProjects.map((p) => {
+              const theme = getProjectTheme(p.projectKey || p.id);
+              const isCurrentActive = activeProjectId === p.id;
+              return (
+                <Link
+                  key={p.id}
+                  to={`/projects/${p.id}/board`}
+                  onClick={() => setActiveProjectId(p.id)}
+                  className={`sidebar-fav-item ${isCurrentActive ? 'active' : ''}`}
+                  title={p.name}
+                >
+                  <span
+                    className="fav-dot"
+                    style={{ background: theme.badgeBg }}
+                  />
+                  <span className="sidebar-fav-name">{p.name}</span>
+                </Link>
+              );
+            })
+          ) : (
+            <span style={{ fontSize: 12, color: '#94a3b8', padding: '4px 6px', display: 'block' }}>
+              Chưa có dự án nào
+            </span>
+          )}
+        </div>
+
+        {/* Archived Projects Section */}
+        <div className="sidebar-section">
+          <span className="sidebar-section-title">DỰ ÁN ĐÃ LƯU TRỮ</span>
+          {archivedProjects.length > 0 ? (
+            archivedProjects.map((p) => {
+              const isCurrentActive = activeProjectId === p.id;
+              return (
+                <Link
+                  key={p.id}
+                  to={`/projects/${p.id}/board`}
+                  onClick={() => setActiveProjectId(p.id)}
+                  className={`sidebar-fav-item archived-item ${isCurrentActive ? 'active' : ''}`}
+                  title={`${p.name} (Đã lưu trữ)`}
+                >
+                  <span
+                    className="fav-dot gray"
+                    style={{ background: '#94a3b8' }}
+                  />
+                  <span className="sidebar-fav-name" style={{ color: 'var(--gray-500)' }}>
+                    {p.name}
+                  </span>
+                </Link>
+              );
+            })
+          ) : (
+            <span style={{ fontSize: 12, color: '#94a3b8', padding: '4px 6px', display: 'block' }}>
+              Chưa có dự án lưu trữ
+            </span>
+          )}
         </div>
       </aside>
 
