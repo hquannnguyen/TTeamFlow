@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { Project, ProjectRole } from '../api/projects.api';
 import { getProjectTheme } from '../utils/project-theme.util';
 import { getMediaUrl } from '../../../api/http';
@@ -20,6 +20,20 @@ function getInitials(name?: string) {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
+function getRoleBadgeStyle(role: string) {
+  switch (role) {
+    case 'OWNER':
+      return { bg: '#FEF3C7', color: '#92400E', label: 'Chủ sở hữu' };
+    case 'MANAGER':
+      return { bg: '#EDE9FE', color: '#5B21B6', label: 'Quản lý' };
+    case 'VIEWER':
+      return { bg: '#F3F4F6', color: '#4B5563', label: 'Chỉ xem' };
+    case 'MEMBER':
+    default:
+      return { bg: '#DBEAFE', color: '#1E40AF', label: 'Thành viên' };
+  }
+}
+
 function MemberAvatarItem({
   user,
   role,
@@ -29,11 +43,12 @@ function MemberAvatarItem({
 }) {
   const [hasError, setHasError] = useState(false);
   const mediaUrl = getMediaUrl(user.avatarUrl);
+  const roleLabel = getRoleBadgeStyle(role).label;
 
   return (
     <div
       className="member-avatar-item"
-      title={`${user.fullName} (${role})`}
+      title={`${user.fullName} (${roleLabel})`}
     >
       {mediaUrl && !hasError ? (
         <img
@@ -73,6 +88,7 @@ export function ProjectCard({
   onRestore,
   onDelete,
 }: ProjectCardProps) {
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -92,18 +108,29 @@ export function ProjectCard({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [menuOpen]);
 
-  const displayedMembers = project.members.slice(0, 3);
-  const extraMembersCount = Math.max(0, project.members.length - 3);
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // Do not trigger card navigation if clicking on interactive controls
+    if (
+      target.closest('button') ||
+      target.closest('a') ||
+      target.closest('.project-menu-wrap') ||
+      target.closest('.project-dropdown-menu') ||
+      target.closest('.member-avatar-extra')
+    ) {
+      return;
+    }
+    if (e.metaKey || e.ctrlKey) {
+      window.open(`/projects/${project.id}/board`, '_blank');
+      return;
+    }
+    navigate(`/projects/${project.id}/board`);
+  };
 
-  // Role tag color palette
-  const roleStyle =
-    currentUserRole === 'OWNER'
-      ? { bg: '#FEF3C7', color: '#92400E', label: 'Chủ sở hữu' }
-      : currentUserRole === 'MANAGER'
-        ? { bg: '#EDE9FE', color: '#5B21B6', label: 'Quản lý' }
-        : currentUserRole === 'VIEWER'
-          ? { bg: '#F3F4F6', color: '#4B5563', label: 'Chỉ xem' }
-          : { bg: '#DBEAFE', color: '#1E40AF', label: 'Thành viên' };
+  const members = project.members || [];
+  const displayedMembers = members.slice(0, 4);
+  const extraMembers = members.slice(4);
+  const extraMembersCount = extraMembers.length;
 
   const progress = project.taskStats?.progress ?? 0;
   const totalTasks = project.taskStats?.total ?? project._count?.tasks ?? 0;
@@ -111,7 +138,10 @@ export function ProjectCard({
   const theme = getProjectTheme(project.projectKey || project.id);
 
   return (
-    <div className={`project-card ${isArchived ? 'archived' : ''}`}>
+    <div
+      className={`project-card ${isArchived ? 'archived' : ''}`}
+      onClick={handleCardClick}
+    >
       {/* Top Accent Color Bar */}
       <div
         className={`project-card-accent-bar ${isArchived ? 'archived' : ''}`}
@@ -298,54 +328,94 @@ export function ProjectCard({
         </div>
       </div>
 
-      {/* Meta Row: Role Badge & Date Range */}
+      {/* Meta Row: Members & Date Range */}
       <div className="project-meta-row">
+        <div className="project-members-meta">
+          <span className="project-members-badge">Thành viên</span>
+          {displayedMembers.length > 0 ? (
+            <div className="member-avatar-stack">
+              {displayedMembers.map((m, idx) => (
+                <MemberAvatarItem
+                  key={m.user?.id || idx}
+                  user={m.user}
+                  role={m.role}
+                />
+              ))}
+              {extraMembersCount > 0 && (
+                <div
+                  className="member-avatar-item member-avatar-extra"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  +{extraMembersCount}
+                  <div className="extra-members-tooltip" role="tooltip">
+                    <div className="extra-members-tooltip-header">
+                      +{extraMembersCount} thành viên khác
+                    </div>
+                    <div className="extra-members-tooltip-list">
+                      {extraMembers.map((m, idx) => {
+                        const roleInfo = getRoleBadgeStyle(m.role);
+                        const mediaUrl = getMediaUrl(m.user?.avatarUrl);
+                        return (
+                          <div key={m.user?.id || idx} className="extra-member-row">
+                            <div className="extra-member-avatar">
+                              {mediaUrl ? (
+                                <img
+                                  src={mediaUrl}
+                                  alt={m.user?.fullName}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <span>{getInitials(m.user?.fullName)}</span>
+                              )}
+                            </div>
+                            <span className="extra-member-name" title={m.user?.fullName}>
+                              {m.user?.fullName}
+                            </span>
+                            <span
+                              className="extra-member-role-badge"
+                              style={{ background: roleInfo.bg, color: roleInfo.color }}
+                            >
+                              {roleInfo.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>Chưa có</span>
+          )}
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span
-            className="project-role-badge"
-            style={{ background: roleStyle.bg, color: roleStyle.color }}
-          >
-            {roleStyle.label}
-          </span>
           {isArchived && (
             <span className="project-archived-badge">Đã lưu trữ</span>
           )}
-        </div>
-
-        {(project.startDate || project.dueDate) && (
-          <div className="project-date-range">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect width="18" height="18" x="3" y="4" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            <span>
-              {project.dueDate
-                ? `Hạn: ${new Date(project.dueDate).toLocaleDateString('vi-VN')}`
-                : `Bắt đầu: ${new Date(project.startDate!).toLocaleDateString('vi-VN')}`}
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Card Footer: Members Avatars Stack & Open Board Link */}
-      <div className="project-card-footer">
-        <div className="member-avatar-stack">
-          {displayedMembers.map((m, idx) => (
-            <MemberAvatarItem
-              key={m.user.id || idx}
-              user={m.user}
-              role={m.role}
-            />
-          ))}
-          {extraMembersCount > 0 && (
-            <div className="member-avatar-item member-avatar-extra" title={`+${extraMembersCount} thành viên khác`}>
-              +{extraMembersCount}
+          {(project.startDate || project.dueDate) && (
+            <div className="project-date-range">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="4" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span>
+                {project.dueDate
+                  ? `Hạn: ${new Date(project.dueDate).toLocaleDateString('vi-VN')}`
+                  : `Bắt đầu: ${new Date(project.startDate!).toLocaleDateString('vi-VN')}`}
+              </span>
             </div>
           )}
         </div>
+      </div>
 
+      {/* Card Footer: Large Open Board Button */}
+      <div className="project-card-footer">
         <Link to={`/projects/${project.id}/board`} className="btn-open-project">
           <span>Mở dự án</span>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
           </svg>
         </Link>

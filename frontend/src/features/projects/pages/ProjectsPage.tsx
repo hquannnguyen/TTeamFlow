@@ -144,10 +144,10 @@ export function ProjectsPage() {
   const selectedOwner = availableOwners.find((o) => o.id === ownerFilter);
   const selectedOwnerLabel =
     ownerFilter === 'all'
-      ? 'Tất cả'
+      ? 'Tất cả dự án'
       : ownerFilter === 'my'
-        ? 'Của tôi'
-        : selectedOwner?.fullName || 'Đã chọn';
+        ? 'Dự án của tôi'
+        : selectedOwner?.fullName || 'Chủ sở hữu';
 
   const statusLabel =
     activeTab === 'ACTIVE'
@@ -156,8 +156,7 @@ export function ProjectsPage() {
         ? 'Đã lưu trữ'
         : 'Tất cả';
 
-  const hasActiveFilters =
-    activeTab !== 'ACTIVE' || (isAdmin && ownerFilter !== 'all') || searchQuery.trim().length > 0;
+
 
   const handleResetFilters = () => {
     setActiveTab('ACTIVE');
@@ -420,16 +419,19 @@ export function ProjectsPage() {
                 aria-expanded={isOwnerDropdownOpen}
                 title="Lọc theo người tạo / chủ sở hữu dự án"
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-                <span>
-                  Chủ sở hữu
-                  {ownerFilter !== 'all' && (
-                    <span className="filter-val-badge">: {selectedOwnerLabel}</span>
-                  )}
-                </span>
+                {ownerFilter === 'all' ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                )}
+                <span>{selectedOwnerLabel}</span>
                 <svg className="filter-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
@@ -454,7 +456,7 @@ export function ProjectsPage() {
                         <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                       </svg>
                       <div className="filter-item-info">
-                        <span className="filter-item-title">Tất cả chủ sở hữu</span>
+                        <span className="filter-item-title">Tất cả dự án</span>
                         <span className="filter-item-sub">Toàn bộ dự án hệ thống</span>
                       </div>
                     </div>
@@ -554,21 +556,6 @@ export function ProjectsPage() {
             </div>
           )}
 
-          {/* 3. Reset filters button */}
-          {hasActiveFilters && (
-            <button
-              type="button"
-              className="projects-filter-reset-btn"
-              onClick={handleResetFilters}
-              title="Đặt lại các bộ lọc về mặc định"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-              <span>Đặt lại</span>
-            </button>
-          )}
 
           {/* 4. Divider */}
           <div className="projects-toolbar-divider" />
@@ -658,7 +645,9 @@ export function ProjectsPage() {
               <p>
                 {searchQuery
                   ? `Không có kết quả nào khớp với từ khóa "${searchQuery}".`
-                  : `Không có dự án nào thuộc chủ sở hữu "${selectedOwnerLabel}".`}
+                  : ownerFilter === 'my'
+                    ? 'Không có dự án nào do bạn tạo hoặc sở hữu.'
+                    : `Không có dự án nào thuộc chủ sở hữu "${selectedOwnerLabel}".`}
               </p>
               <button
                 type="button"
