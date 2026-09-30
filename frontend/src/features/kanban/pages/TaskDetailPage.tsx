@@ -108,25 +108,29 @@ export function TaskDetailPage() {
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
 
-  // Fetch Project Info
-  const { data: project } = useQuery({
-    queryKey: ['project', projectId],
-    queryFn: () => getProject(projectId),
-    enabled: Boolean(projectId),
-  });
-
-  // Fetch Columns
-  const { data: columns = [] } = useQuery({
-    queryKey: ['kanban', projectId],
-    queryFn: () => getBoard(projectId),
-    enabled: Boolean(projectId),
-  });
-
   // Fetch Task Detail
   const { data: task, isLoading: isLoadingTask } = useQuery({
     queryKey: ['taskDetail', taskId],
     queryFn: () => getTaskDetail(taskId),
     enabled: Boolean(taskId),
+  });
+
+  const effectiveProjectId = projectId || task?.projectId || '';
+
+  // Fetch Project Info
+  const { data: project } = useQuery({
+    queryKey: ['project', effectiveProjectId],
+    queryFn: () => getProject(effectiveProjectId),
+    enabled: Boolean(effectiveProjectId),
+  });
+
+  const isArchived = project?.status === 'ARCHIVED';
+
+  // Fetch Columns
+  const { data: columns = [] } = useQuery({
+    queryKey: ['kanban', effectiveProjectId],
+    queryFn: () => getBoard(effectiveProjectId),
+    enabled: Boolean(effectiveProjectId),
   });
 
   // Fetch Comments
@@ -145,9 +149,9 @@ export function TaskDetailPage() {
 
   // Fetch Activity Logs
   const { data: activityLogs = [] } = useQuery({
-    queryKey: ['activityLogs', projectId],
-    queryFn: () => getActivityLogs(projectId),
-    enabled: Boolean(projectId),
+    queryKey: ['activityLogs', effectiveProjectId],
+    queryFn: () => getActivityLogs(effectiveProjectId),
+    enabled: Boolean(effectiveProjectId),
   });
 
   useEffect(() => {
@@ -411,11 +415,24 @@ export function TaskDetailPage() {
       </div>
 
       <div className="task-detail-scroll-body">
+        {isArchived && (
+          <div className="members-archived-banner" style={{ marginBottom: '16px' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect width="20" height="5" x="2" y="3" rx="1" />
+              <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+              <path d="M10 12h4" />
+            </svg>
+            <span>
+              <strong>Dự án đã được lưu trữ (ARCHIVED):</strong> Nhiệm vụ này đang ở chế độ chỉ đọc. Không thể chỉnh sửa thông tin, danh sách kiểm tra hoặc bình luận cho đến khi dự án được khôi phục trạng thái hoạt động.
+            </span>
+          </div>
+        )}
+
         {/* Header Meta Card */}
         <div className="task-detail-meta-card">
           <div className="task-detail-header-row">
             <div className="task-detail-title-col">
-              {isEditingTitle ? (
+              {!isArchived && isEditingTitle ? (
                 <input
                   type="text"
                   className="task-title-input"
@@ -440,8 +457,11 @@ export function TaskDetailPage() {
               ) : (
                 <h1
                   className="task-detail-main-title"
-                  title="Click để chỉnh sửa tiêu đề"
-                  onClick={() => setIsEditingTitle(true)}
+                  style={{ cursor: isArchived ? 'default' : 'pointer' }}
+                  title={isArchived ? task?.title : 'Click để chỉnh sửa tiêu đề'}
+                  onClick={() => {
+                    if (!isArchived) setIsEditingTitle(true);
+                  }}
                 >
                   {task?.title}
                 </h1>
@@ -455,8 +475,9 @@ export function TaskDetailPage() {
                 <select
                   className="task-status-select-pill"
                   value={task?.columnId || ''}
+                  disabled={isArchived}
                   onChange={(e) => moveTaskMutation.mutate(e.target.value)}
-                  title="Bấm để thay đổi trạng thái"
+                  title={isArchived ? 'Dự án đã lưu trữ' : 'Bấm để thay đổi trạng thái'}
                 >
                   {columns.map((col) => (
                     <option key={col.id} value={col.id}>
@@ -494,26 +515,28 @@ export function TaskDetailPage() {
                           <div className="assignee-chip-avatar">{getInitials(u.fullName)}</div>
                         )}
                         <span className="assignee-chip-name">{u.fullName}</span>
-                        <button
-                          type="button"
-                          className="btn-remove-assignee-chip"
-                          title={`Gỡ ${u.fullName}`}
-                          onClick={() => {
-                            const remainingIds = assignedUsers
-                              .filter((a) => a.id !== u.id)
-                              .map((a) => a.id);
-                            updateTaskMutation.mutate({ assigneeIds: remainingIds });
-                          }}
-                        >
-                          ✕
-                        </button>
+                        {!isArchived && (
+                          <button
+                            type="button"
+                            className="btn-remove-assignee-chip"
+                            title={`Gỡ ${u.fullName}`}
+                            onClick={() => {
+                              const remainingIds = assignedUsers
+                                .filter((a) => a.id !== u.id)
+                                .map((a) => a.id);
+                              updateTaskMutation.mutate({ assigneeIds: remainingIds });
+                            }}
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                     );
                   })
                 )}
 
                 {/* Searchable input to add assignee */}
-                {unassignedMembers.length > 0 && (
+                {!isArchived && unassignedMembers.length > 0 && (
                   <MemberAutocomplete
                     members={unassignedMembers}
                     mode="add"
@@ -532,6 +555,7 @@ export function TaskDetailPage() {
               <select
                 className="task-meta-select priority"
                 value={task?.priority || 'MEDIUM'}
+                disabled={isArchived}
                 onChange={(e) => {
                   updateTaskMutation.mutate({
                     priority: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
@@ -551,6 +575,7 @@ export function TaskDetailPage() {
                 type="datetime-local"
                 className="task-meta-date-input"
                 value={formatDateForInput(task?.dueDate)}
+                disabled={isArchived}
                 onChange={(e) => {
                   const val = e.target.value;
                   const dateVal = val ? new Date(`${val}:00+07:00`).toISOString() : null;
@@ -587,20 +612,23 @@ export function TaskDetailPage() {
                 <textarea
                   className="task-desc-textarea"
                   rows={5}
-                  placeholder="Mô tả nội dung công việc cần làm..."
+                  placeholder={isArchived ? 'Chưa có mô tả cho nhiệm vụ này.' : 'Mô tả nội dung công việc cần làm...'}
                   value={description}
+                  disabled={isArchived}
                   onChange={(e) => setDescription(e.target.value)}
                 />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
-                  <button
-                    type="button"
-                    className="btn-primary"
-                    onClick={() => updateTaskMutation.mutate({ description })}
-                    disabled={updateTaskMutation.isPending}
-                  >
-                    {updateTaskMutation.isPending ? 'Đang lưu...' : 'Lưu mô tả'}
-                  </button>
-                </div>
+                {!isArchived && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      onClick={() => updateTaskMutation.mutate({ description })}
+                      disabled={updateTaskMutation.isPending}
+                    >
+                      {updateTaskMutation.isPending ? 'Đang lưu...' : 'Lưu mô tả'}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="task-checklists-box">
@@ -612,6 +640,7 @@ export function TaskDetailPage() {
                         <input
                           type="checkbox"
                           checked={isChecked}
+                          disabled={isArchived}
                           onChange={(e) =>
                             updateChecklistMutation.mutate({
                               id: item.id,
@@ -622,38 +651,42 @@ export function TaskDetailPage() {
                         <span className={`checklist-text ${isChecked ? 'done' : ''}`}>
                           {item.content}
                         </span>
-                        <button
-                          type="button"
-                          className="checklist-del-btn"
-                          onClick={() => deleteChecklistMutation.mutate(item.id)}
-                        >
-                          ×
-                        </button>
+                        {!isArchived && (
+                          <button
+                            type="button"
+                            className="checklist-del-btn"
+                            onClick={() => deleteChecklistMutation.mutate(item.id)}
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                     );
                   })}
                 </div>
 
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!newChecklist.trim()) return;
-                    createChecklistMutation.mutate(newChecklist.trim());
-                  }}
-                  style={{ display: 'flex', gap: '8px', marginTop: '14px' }}
-                >
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="+ Thêm nhiệm vụ phụ..."
-                    value={newChecklist}
-                    onChange={(e) => setNewChecklist(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <button type="submit" className="btn-secondary">
-                    Thêm
-                  </button>
-                </form>
+                {!isArchived && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!newChecklist.trim()) return;
+                      createChecklistMutation.mutate(newChecklist.trim());
+                    }}
+                    style={{ display: 'flex', gap: '8px', marginTop: '14px' }}
+                  >
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="+ Thêm nhiệm vụ phụ..."
+                      value={newChecklist}
+                      onChange={(e) => setNewChecklist(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button type="submit" className="btn-secondary">
+                      Thêm
+                    </button>
+                  </form>
+                )}
               </div>
             )}
           </div>
@@ -681,75 +714,77 @@ export function TaskDetailPage() {
           <div className="task-tab-content">
             {activeBottomTab === 'comments' ? (
               <div className="comments-container">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!newComment.trim()) return;
-                    createCommentMutation.mutate(newComment.trim());
-                  }}
-                  className="comment-post-form"
-                >
-                  {/* Floating Mention Popup above textarea */}
-                  <div className="comment-input-wrap">
-                    {showMentionDropdown && (
-                      <div className="mention-dropdown-menu">
-                        {members
-                          .filter((m) =>
-                            mentionFilter
-                              ? m.user.fullName.toLowerCase().includes(mentionFilter)
-                              : true
-                          )
-                          .map((m) => {
-                            const avatar = getMediaUrl(m.user.avatarUrl);
-                            return (
-                              <button
-                                key={m.user.id}
-                                type="button"
-                                className="mention-dropdown-item"
-                                onClick={() => handleSelectMention(m.user.fullName)}
-                              >
-                                {avatar ? (
-                                  <img
-                                    src={avatar}
-                                    alt={m.user.fullName}
-                                    className="mention-avatar-sm"
-                                  />
-                                ) : (
-                                  <div className="mention-avatar-sm">
-                                    {getInitials(m.user.fullName)}
-                                  </div>
-                                )}
-                                <span>{m.user.fullName}</span>
-                              </button>
-                            );
-                          })}
-                      </div>
-                    )}
+                {!isArchived && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!newComment.trim()) return;
+                      createCommentMutation.mutate(newComment.trim());
+                    }}
+                    className="comment-post-form"
+                  >
+                    {/* Floating Mention Popup above textarea */}
+                    <div className="comment-input-wrap">
+                      {showMentionDropdown && (
+                        <div className="mention-dropdown-menu">
+                          {members
+                            .filter((m) =>
+                              mentionFilter
+                                ? m.user.fullName.toLowerCase().includes(mentionFilter)
+                                : true
+                            )
+                            .map((m) => {
+                              const avatar = getMediaUrl(m.user.avatarUrl);
+                              return (
+                                <button
+                                  key={m.user.id}
+                                  type="button"
+                                  className="mention-dropdown-item"
+                                  onClick={() => handleSelectMention(m.user.fullName)}
+                                >
+                                  {avatar ? (
+                                    <img
+                                      src={avatar}
+                                      alt={m.user.fullName}
+                                      className="mention-avatar-sm"
+                                    />
+                                  ) : (
+                                    <div className="mention-avatar-sm">
+                                      {getInitials(m.user.fullName)}
+                                    </div>
+                                  )}
+                                  <span>{m.user.fullName}</span>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      )}
 
-                    <textarea
-                      className="comment-textarea"
-                      rows={3}
-                      placeholder="Viết bình luận hoặc thông báo (Gõ @ để tag thành viên)..."
-                      value={newComment}
-                      onChange={handleCommentChange}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Escape') {
-                          setShowMentionDropdown(false);
-                        }
-                      }}
-                    />
-                  </div>
+                      <textarea
+                        className="comment-textarea"
+                        rows={3}
+                        placeholder="Viết bình luận hoặc thông báo (Gõ @ để tag thành viên)..."
+                        value={newComment}
+                        onChange={handleCommentChange}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape') {
+                            setShowMentionDropdown(false);
+                          }
+                        }}
+                      />
+                    </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button
-                      type="submit"
-                      className="btn-primary"
-                      disabled={createCommentMutation.isPending || !newComment.trim()}
-                    >
-                      {createCommentMutation.isPending ? 'Đang gửi...' : 'Gửi tin'}
-                    </button>
-                  </div>
-                </form>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={createCommentMutation.isPending || !newComment.trim()}
+                      >
+                        {createCommentMutation.isPending ? 'Đang gửi...' : 'Gửi tin'}
+                      </button>
+                    </div>
+                  </form>
+                )}
 
                 <div className="comments-stream">
                   {comments.map((c) => {
@@ -777,14 +812,16 @@ export function TaskDetailPage() {
                           <p className="comment-text">{renderCommentWithMentions(c.content)}</p>
                         </div>
 
-                        <button
-                          type="button"
-                          className="comment-del-btn"
-                          title="Xóa bình luận"
-                          onClick={() => deleteCommentMutation.mutate(c.id)}
-                        >
-                          ✕
-                        </button>
+                        {!isArchived && (
+                          <button
+                            type="button"
+                            className="comment-del-btn"
+                            title="Xóa bình luận"
+                            onClick={() => deleteCommentMutation.mutate(c.id)}
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                     );
                   })}
