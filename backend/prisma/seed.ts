@@ -29,7 +29,9 @@ async function main() {
   });
 
   // Gán admin và member vào các dự án hiện có để có thể phân công nhiệm vụ
-  const projects = await prisma.project.findMany({ where: { deletedAt: null } });
+  const projects = await prisma.project.findMany({
+    where: { deletedAt: null },
+  });
   for (const project of projects) {
     await prisma.projectMember.upsert({
       where: {

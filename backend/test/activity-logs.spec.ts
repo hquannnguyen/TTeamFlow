@@ -398,13 +398,17 @@ async function runTests() {
   updateLogs.length = 0;
   const newDueDate = new Date(Date.now() + 86400000).toISOString();
   await tasksUpdateService.update(taskId, actorId, {
-    priority: "URGENT" as any,
+    priority: "URGENT",
     dueDate: newDueDate,
   });
 
   assert.strictEqual(updateLogs.length, 2);
-  const priorityLog = updateLogs.find((l) => l.metadata?.changeType === "PRIORITY");
-  const dueDateLog = updateLogs.find((l) => l.metadata?.changeType === "DUE_DATE");
+  const priorityLog = updateLogs.find(
+    (l) => l.metadata?.changeType === "PRIORITY",
+  );
+  const dueDateLog = updateLogs.find(
+    (l) => l.metadata?.changeType === "DUE_DATE",
+  );
 
   assert.ok(priorityLog, "Phải có log đổi độ ưu tiên");
   assert.strictEqual(priorityLog.metadata.oldPriority, "MEDIUM");
@@ -412,8 +416,13 @@ async function runTests() {
 
   assert.ok(dueDateLog, "Phải có log đổi deadline");
   assert.strictEqual(dueDateLog.metadata.oldDueDate, null);
-  assert.strictEqual(dueDateLog.metadata.newDueDate, new Date(newDueDate).toISOString());
-  console.log("✅ TC-11: Đổi độ ưu tiên và deadline tự động ghi log TASK_UPDATED chi tiết");
+  assert.strictEqual(
+    dueDateLog.metadata.newDueDate,
+    new Date(newDueDate).toISOString(),
+  );
+  console.log(
+    "✅ TC-11: Đổi độ ưu tiên và deadline tự động ghi log TASK_UPDATED chi tiết",
+  );
 
   console.log(
     "\n🎉 TOÀN BỘ 11/11 TEST CASES CHO TASK 20 ĐÃ PASS THÀNH CÔNG 100%!\n",

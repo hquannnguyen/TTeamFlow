@@ -53,4 +53,3 @@ export class QueryUsersDto {
   })
   sortOrder: "asc" | "desc" = "desc";
 }
-

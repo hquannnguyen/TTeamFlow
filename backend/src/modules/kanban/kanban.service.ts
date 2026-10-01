@@ -108,7 +108,9 @@ export class KanbanService {
       throw new NotFoundException("Cột không tồn tại hoặc không thuộc dự án");
     }
     if (column.project.status === ProjectStatus.ARCHIVED) {
-      throw new BadRequestException("Dự án đã lưu trữ, không thể chỉnh sửa cột");
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể chỉnh sửa cột",
+      );
     }
 
     return this.prisma.kanbanColumn.update({

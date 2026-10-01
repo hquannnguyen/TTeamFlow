@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma, ProjectRole, ProjectStatus } from "@prisma/client";
+import { ProjectRole, ProjectStatus, SystemRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { MoveTaskDto } from "./dto/move-task.dto";
@@ -378,8 +378,7 @@ export class TasksService {
                   entityId: task.id,
                   metadata: {
                     unassignedUserId: rId,
-                    unassignedUserName:
-                      oldAssigneeMap.get(rId) ?? "thành viên",
+                    unassignedUserName: oldAssigneeMap.get(rId) ?? "thành viên",
                   },
                 },
               });
@@ -397,8 +396,7 @@ export class TasksService {
                   entityId: task.id,
                   metadata: {
                     assignedUserId: aId,
-                    assignedUserName:
-                      addedUserMap.get(aId) ?? "thành viên",
+                    assignedUserName: addedUserMap.get(aId) ?? "thành viên",
                   },
                 },
               });

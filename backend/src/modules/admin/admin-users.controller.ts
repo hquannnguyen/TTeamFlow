@@ -39,4 +39,3 @@ export class AdminUsersController {
     return this.adminUsersService.updateUserStatus(userId, admin.id, dto);
   }
 }
-

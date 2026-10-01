@@ -70,4 +70,3 @@ export type ActivityMetadata =
   | ProjectUpdatedMetadata
   | ColumnReorderedMetadata
   | Record<string, unknown>;
-
