@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import assert from "node:assert";
-import { ForbiddenException, NotFoundException } from "@nestjs/common";
+import { ForbiddenException } from "@nestjs/common";
 import { NotificationType } from "@prisma/client";
 import { NotificationsService } from "../src/modules/notifications/notifications.service";
 
@@ -34,7 +34,10 @@ async function runTests() {
     };
 
     const service = new NotificationsService(mockPrisma);
-    const result = await service.getUserNotifications(userId, { page: 1, limit: 10 });
+    const result = await service.getUserNotifications(userId, {
+      page: 1,
+      limit: 10,
+    });
 
     assert.strictEqual(result.data.length, 1);
     assert.strictEqual(result.meta.unreadCount, 1);
@@ -147,7 +150,9 @@ async function runTests() {
 
     assert.strictEqual(result, null);
     assert.strictEqual(created, false);
-    console.log("✔ Test 6: Tự động loại bỏ thông báo tự gửi cho chính mình khi bình luận (Self-notification)");
+    console.log(
+      "✔ Test 6: Tự động loại bỏ thông báo tự gửi cho chính mình khi bình luận (Self-notification)",
+    );
   }
 
   // 7. remove - Owner can remove, Non-owner blocked
@@ -221,7 +226,9 @@ async function runTests() {
     assert.strictEqual(createdBatch.length, 2);
     assert.strictEqual(createdBatch[0].userId, "user-target");
     assert.strictEqual(createdBatch[1].userId, "user-creator");
-    console.log("✔ Test 8: createMany giữ thông báo gán task và lọc bỏ tự bình luận");
+    console.log(
+      "✔ Test 8: createMany giữ thông báo gán task và lọc bỏ tự bình luận",
+    );
   }
 
   console.log("\n🎉 Tất cả test Notifications Service đã thành công 100%!\n");

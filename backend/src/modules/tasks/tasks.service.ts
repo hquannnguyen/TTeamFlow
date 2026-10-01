@@ -162,94 +162,95 @@ export class TasksService {
         : new Date()
       : null;
 
-    return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.task.update({
-        where: { id: taskId },
-        data: {
-          columnId: target.id,
-          position: dto.newPosition,
-          completedAt: nextCompletedAt,
-        },
-        include: {
-          column: true,
-          assignments: {
-            include: {
-              user: {
-                select: { id: true, fullName: true, avatarUrl: true },
+    const { updated, notifPayloads } = await this.prisma.$transaction(
+      async (tx) => {
+        const updated = await tx.task.update({
+          where: { id: taskId },
+          data: {
+            columnId: target.id,
+            position: dto.newPosition,
+            completedAt: nextCompletedAt,
+          },
+          include: {
+            column: true,
+            assignments: {
+              include: {
+                user: {
+                  select: { id: true, fullName: true, avatarUrl: true },
+                },
               },
             },
           },
-        },
-      });
+        });
 
-      // Kiểm tra và reorder lại các task trong column nếu có trùng lặp hoặc khoảng cách quá nhỏ
-      const columnTasks = await tx.task.findMany({
-        where: { columnId: target.id, deletedAt: null },
-        orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
-        select: { id: true, position: true },
-      });
+        // Kiểm tra và reorder lại các task trong column nếu có trùng lặp hoặc khoảng cách quá nhỏ
+        const columnTasks = await tx.task.findMany({
+          where: { columnId: target.id, deletedAt: null },
+          orderBy: [{ position: "asc" }, { updatedAt: "desc" }],
+          select: { id: true, position: true },
+        });
 
-      let needsReorder = false;
-      for (let i = 0; i < columnTasks.length - 1; i++) {
-        if (columnTasks[i + 1].position - columnTasks[i].position < 1) {
-          needsReorder = true;
-          break;
+        let needsReorder = false;
+        for (let i = 0; i < columnTasks.length - 1; i++) {
+          if (columnTasks[i + 1].position - columnTasks[i].position < 1) {
+            needsReorder = true;
+            break;
+          }
         }
-      }
 
-      if (needsReorder) {
-        for (let i = 0; i < columnTasks.length; i++) {
-          const normalizedPos = (i + 1) * 1000;
-          if (columnTasks[i].position !== normalizedPos) {
-            await tx.task.update({
-              where: { id: columnTasks[i].id },
-              data: { position: normalizedPos },
-            });
-            if (columnTasks[i].id === taskId) {
-              updated.position = normalizedPos;
+        if (needsReorder) {
+          for (let i = 0; i < columnTasks.length; i++) {
+            const normalizedPos = (i + 1) * 1000;
+            if (columnTasks[i].position !== normalizedPos) {
+              await tx.task.update({
+                where: { id: columnTasks[i].id },
+                data: { position: normalizedPos },
+              });
+              if (columnTasks[i].id === taskId) {
+                updated.position = normalizedPos;
+              }
             }
           }
         }
-      }
 
-      const isNowCompleted = target.isCompleted && !task.column.isCompleted;
-      await tx.activityLog.create({
-        data: {
-          projectId: task.projectId,
-          actorId,
-          action: isNowCompleted ? "TASK_COMPLETED" : "TASK_MOVED",
-          entityType: "TASK",
-          entityId: task.id,
-          metadata: {
-            fromColumnId: task.columnId,
-            fromColumnName: task.column.name,
-            toColumnId: target.id,
-            toColumnName: target.name,
-            newPosition: updated.position,
+        const isNowCompleted = target.isCompleted && !task.column.isCompleted;
+        await tx.activityLog.create({
+          data: {
+            projectId: task.projectId,
+            actorId,
+            action: isNowCompleted ? "TASK_COMPLETED" : "TASK_MOVED",
+            entityType: "TASK",
+            entityId: task.id,
+            metadata: {
+              fromColumnId: task.columnId,
+              fromColumnName: task.column.name,
+              toColumnId: target.id,
+              toColumnName: target.name,
+              newPosition: updated.position,
+            },
           },
-        },
-      });
+        });
 
-      let notifPayloads: Array<{
-        userId: string;
-        actorId: string;
-        projectId: string;
-        taskId: string;
-        type: NotificationType;
-        title: string;
-        content: string;
-        data: Record<string, unknown>;
-      }> = [];
+        let notifPayloads: Array<{
+          userId: string;
+          actorId: string;
+          projectId: string;
+          taskId: string;
+          type: NotificationType;
+          title: string;
+          content: string;
+          data: Record<string, unknown>;
+        }> = [];
 
-      if (this.notifications && updated.assignments?.length) {
-        const title = isNowCompleted
-          ? "Nhiệm vụ đã hoàn thành"
-          : "Trạng thái nhiệm vụ thay đổi";
-        const content = isNowCompleted
-          ? `Nhiệm vụ "${task.title}" đã được hoàn thành (chuyển sang "${target.name}").`
-          : `Nhiệm vụ "${task.title}" đã được chuyển sang "${target.name}".`;
+        if (this.notifications && updated.assignments?.length) {
+          const title = isNowCompleted
+            ? "Nhiệm vụ đã hoàn thành"
+            : "Trạng thái nhiệm vụ thay đổi";
+          const content = isNowCompleted
+            ? `Nhiệm vụ "${task.title}" đã được hoàn thành (chuyển sang "${target.name}").`
+            : `Nhiệm vụ "${task.title}" đã được chuyển sang "${target.name}".`;
 
-        notifPayloads = updated.assignments.map((a) => ({
+          notifPayloads = updated.assignments.map((a) => ({
             userId: a.userId,
             actorId,
             projectId: task.projectId,
@@ -265,10 +266,11 @@ export class TasksService {
               isCompleted: target.isCompleted,
             },
           }));
-      }
+        }
 
-      return { updated, notifPayloads };
-    });
+        return { updated, notifPayloads };
+      },
+    );
 
     if (this.notifications && notifPayloads.length > 0) {
       await this.notifications.createMany(notifPayloads);
@@ -382,87 +384,50 @@ export class TasksService {
     let oldDue: string | null = null;
     let newDue: string | null = null;
 
-    return this.prisma.$transaction(async (tx) => {
-      let hasLogged = false;
+    const { updatedTask, notifPayloads } = await this.prisma.$transaction(
+      async (tx) => {
+        let hasLogged = false;
 
-      // Xử lý thay đổi người được phân công (Assignees) & ghi log Chuyển giao / Phân công / Gỡ
-      if (dto.assigneeIds !== undefined) {
-        const oldAssignments = task.assignments || [];
-        oldAssigneeMap = new Map(
-          oldAssignments.map((a) => [a.user.id, a.user.fullName]),
-        );
-        const oldAssigneeIds = Array.from(oldAssigneeMap.keys());
-        const newAssigneeIds = Array.from(new Set(dto.assigneeIds));
+        // Xử lý thay đổi người được phân công (Assignees) & ghi log Chuyển giao / Phân công / Gỡ
+        if (dto.assigneeIds !== undefined) {
+          const oldAssignments = task.assignments || [];
+          oldAssigneeMap = new Map(
+            oldAssignments.map((a) => [a.user.id, a.user.fullName]),
+          );
+          const oldAssigneeIds = Array.from(oldAssigneeMap.keys());
+          const newAssigneeIds = Array.from(new Set(dto.assigneeIds));
 
-        addedIds = newAssigneeIds.filter((id) => !oldAssigneeMap.has(id));
-        removedIds = oldAssigneeIds.filter(
-          (id) => !newAssigneeIds.includes(id),
-        );
-
-        if (addedIds.length > 0 || removedIds.length > 0) {
-          await tx.taskAssignment.deleteMany({ where: { taskId } });
-          if (newAssigneeIds.length) {
-            await tx.taskAssignment.createMany({
-              data: newAssigneeIds.map((userId) => ({ taskId, userId })),
-            });
-          }
-
-          const addedUsers =
-            addedIds.length > 0
-              ? await tx.user.findMany({
-                  where: { id: { in: addedIds } },
-                  select: { id: true, fullName: true },
-                })
-              : [];
-          const addedUserMap = new Map(
-            addedUsers.map((u) => [u.id, u.fullName]),
+          addedIds = newAssigneeIds.filter((id) => !oldAssigneeMap.has(id));
+          removedIds = oldAssigneeIds.filter(
+            (id) => !newAssigneeIds.includes(id),
           );
 
-          // Phát hiện Chuyển giao trực tiếp (1 người cũ -> 1 người mới)
-          if (removedIds.length === 1 && addedIds.length === 1) {
-            const fromId = removedIds[0];
-            const toId = addedIds[0];
-            const fromName = oldAssigneeMap.get(fromId) ?? "thành viên";
-            const toName = addedUserMap.get(toId) ?? "thành viên";
-
-            await tx.activityLog.create({
-              data: {
-                projectId: task.projectId,
-                actorId,
-                action: "TASK_ASSIGNED",
-                entityType: "TASK",
-                entityId: task.id,
-                metadata: {
-                  isTransfer: true,
-                  transferredFromUserId: fromId,
-                  transferredFromUserName: fromName,
-                  assignedUserId: toId,
-                  assignedUserName: toName,
-                },
-              },
-            });
-            hasLogged = true;
-          } else {
-            // Ghi nhận gỡ thành viên
-            for (const rId of removedIds) {
-              await tx.activityLog.create({
-                data: {
-                  projectId: task.projectId,
-                  actorId,
-                  action: "TASK_UNASSIGNED",
-                  entityType: "TASK",
-                  entityId: task.id,
-                  metadata: {
-                    unassignedUserId: rId,
-                    unassignedUserName: oldAssigneeMap.get(rId) ?? "thành viên",
-                  },
-                },
+          if (addedIds.length > 0 || removedIds.length > 0) {
+            await tx.taskAssignment.deleteMany({ where: { taskId } });
+            if (newAssigneeIds.length) {
+              await tx.taskAssignment.createMany({
+                data: newAssigneeIds.map((userId) => ({ taskId, userId })),
               });
-              hasLogged = true;
             }
 
-            // Ghi nhận gán thành viên mới
-            for (const aId of addedIds) {
+            const addedUsers =
+              addedIds.length > 0
+                ? await tx.user.findMany({
+                    where: { id: { in: addedIds } },
+                    select: { id: true, fullName: true },
+                  })
+                : [];
+            const addedUserMap = new Map(
+              addedUsers.map((u) => [u.id, u.fullName]),
+            );
+
+            // Phát hiện Chuyển giao trực tiếp (1 người cũ -> 1 người mới)
+            if (removedIds.length === 1 && addedIds.length === 1) {
+              const fromId = removedIds[0];
+              const toId = addedIds[0];
+              const fromName = oldAssigneeMap.get(fromId) ?? "thành viên";
+              const toName = addedUserMap.get(toId) ?? "thành viên";
+
               await tx.activityLog.create({
                 data: {
                   projectId: task.projectId,
@@ -471,72 +436,88 @@ export class TasksService {
                   entityType: "TASK",
                   entityId: task.id,
                   metadata: {
-                    assignedUserId: aId,
-                    assignedUserName: addedUserMap.get(aId) ?? "thành viên",
+                    isTransfer: true,
+                    transferredFromUserId: fromId,
+                    transferredFromUserName: fromName,
+                    assignedUserId: toId,
+                    assignedUserName: toName,
                   },
                 },
               });
               hasLogged = true;
+            } else {
+              // Ghi nhận gỡ thành viên
+              for (const rId of removedIds) {
+                await tx.activityLog.create({
+                  data: {
+                    projectId: task.projectId,
+                    actorId,
+                    action: "TASK_UNASSIGNED",
+                    entityType: "TASK",
+                    entityId: task.id,
+                    metadata: {
+                      unassignedUserId: rId,
+                      unassignedUserName:
+                        oldAssigneeMap.get(rId) ?? "thành viên",
+                    },
+                  },
+                });
+                hasLogged = true;
+              }
+
+              // Ghi nhận gán thành viên mới
+              for (const aId of addedIds) {
+                await tx.activityLog.create({
+                  data: {
+                    projectId: task.projectId,
+                    actorId,
+                    action: "TASK_ASSIGNED",
+                    entityType: "TASK",
+                    entityId: task.id,
+                    metadata: {
+                      assignedUserId: aId,
+                      assignedUserName: addedUserMap.get(aId) ?? "thành viên",
+                    },
+                  },
+                });
+                hasLogged = true;
+              }
             }
           }
         }
-      }
 
-      const updatedTask = await tx.task.update({
-        where: { id: taskId },
-        data: {
-          title: dto.title?.trim(),
-          description: dto.description?.trim(),
-          priority: dto.priority,
-          startDate:
-            dto.startDate !== undefined
-              ? dto.startDate
-                ? new Date(dto.startDate)
-                : null
-              : undefined,
-          dueDate:
-            dto.dueDate !== undefined
-              ? dto.dueDate
-                ? new Date(dto.dueDate)
-                : null
-              : undefined,
-        },
-        include: {
-          assignments: {
-            include: {
-              user: {
-                select: { id: true, fullName: true, avatarUrl: true },
+        const updatedTask = await tx.task.update({
+          where: { id: taskId },
+          data: {
+            title: dto.title?.trim(),
+            description: dto.description?.trim(),
+            priority: dto.priority,
+            startDate:
+              dto.startDate !== undefined
+                ? dto.startDate
+                  ? new Date(dto.startDate)
+                  : null
+                : undefined,
+            dueDate:
+              dto.dueDate !== undefined
+                ? dto.dueDate
+                  ? new Date(dto.dueDate)
+                  : null
+                : undefined,
+          },
+          include: {
+            assignments: {
+              include: {
+                user: {
+                  select: { id: true, fullName: true, avatarUrl: true },
+                },
               },
             },
           },
-        },
-      });
-
-      // Ghi log khi thay đổi mức độ ưu tiên
-      if (dto.priority !== undefined && dto.priority !== task.priority) {
-        await tx.activityLog.create({
-          data: {
-            projectId: task.projectId,
-            actorId,
-            action: "TASK_UPDATED",
-            entityType: "TASK",
-            entityId: task.id,
-            metadata: {
-              changeType: "PRIORITY",
-              field: "priority",
-              oldPriority: task.priority,
-              newPriority: dto.priority,
-            },
-          },
         });
-        hasLogged = true;
-      }
 
-      // Ghi log khi thay đổi thời hạn deadline
-      if (dto.dueDate !== undefined) {
-        oldDue = task.dueDate ? task.dueDate.toISOString() : null;
-        newDue = dto.dueDate ? new Date(dto.dueDate).toISOString() : null;
-        if (oldDue !== newDue) {
+        // Ghi log khi thay đổi mức độ ưu tiên
+        if (dto.priority !== undefined && dto.priority !== task.priority) {
           await tx.activityLog.create({
             data: {
               projectId: task.projectId,
@@ -545,135 +526,159 @@ export class TasksService {
               entityType: "TASK",
               entityId: task.id,
               metadata: {
-                changeType: "DUE_DATE",
-                field: "dueDate",
-                oldDueDate: oldDue,
-                newDueDate: newDue,
+                changeType: "PRIORITY",
+                field: "priority",
+                oldPriority: task.priority,
+                newPriority: dto.priority,
               },
             },
           });
           hasLogged = true;
         }
-      }
 
-      // Ghi log khi đổi tiêu đề
-      if (dto.title !== undefined && dto.title.trim() !== task.title) {
-        await tx.activityLog.create({
-          data: {
-            projectId: task.projectId,
-            actorId,
-            action: "TASK_UPDATED",
-            entityType: "TASK",
-            entityId: task.id,
-            metadata: {
-              changeType: "TITLE",
-              field: "title",
-              oldTitle: task.title,
-              newTitle: dto.title.trim(),
+        // Ghi log khi thay đổi thời hạn deadline
+        if (dto.dueDate !== undefined) {
+          oldDue = task.dueDate ? task.dueDate.toISOString() : null;
+          newDue = dto.dueDate ? new Date(dto.dueDate).toISOString() : null;
+          if (oldDue !== newDue) {
+            await tx.activityLog.create({
+              data: {
+                projectId: task.projectId,
+                actorId,
+                action: "TASK_UPDATED",
+                entityType: "TASK",
+                entityId: task.id,
+                metadata: {
+                  changeType: "DUE_DATE",
+                  field: "dueDate",
+                  oldDueDate: oldDue,
+                  newDueDate: newDue,
+                },
+              },
+            });
+            hasLogged = true;
+          }
+        }
+
+        // Ghi log khi đổi tiêu đề
+        if (dto.title !== undefined && dto.title.trim() !== task.title) {
+          await tx.activityLog.create({
+            data: {
+              projectId: task.projectId,
+              actorId,
+              action: "TASK_UPDATED",
+              entityType: "TASK",
+              entityId: task.id,
+              metadata: {
+                changeType: "TITLE",
+                field: "title",
+                oldTitle: task.title,
+                newTitle: dto.title.trim(),
+              },
             },
-          },
-        });
-        hasLogged = true;
-      }
-
-      // Ghi log khi đổi mô tả
-      if (
-        dto.description !== undefined &&
-        (dto.description?.trim() ?? null) !== (task.description ?? null)
-      ) {
-        await tx.activityLog.create({
-          data: {
-            projectId: task.projectId,
-            actorId,
-            action: "TASK_UPDATED",
-            entityType: "TASK",
-            entityId: task.id,
-            metadata: {
-              changeType: "DESCRIPTION",
-              field: "description",
-            },
-          },
-        });
-        hasLogged = true;
-      }
-
-      if (!hasLogged) {
-        await tx.activityLog.create({
-          data: {
-            projectId: task.projectId,
-            actorId,
-            action: "TASK_UPDATED",
-            entityType: "TASK",
-            entityId: task.id,
-          },
-        });
-      }
-
-      let notifPayloads: Array<{
-        userId: string;
-        actorId: string;
-        projectId: string;
-        taskId: string;
-        type: NotificationType;
-        title: string;
-        content: string;
-        data: Record<string, unknown>;
-      }> = [];
-
-      if (this.notifications) {
-        // 1. Chuyển giao trực tiếp
-        if (removedIds.length === 1 && addedIds.length === 1) {
-          const fromId = removedIds[0];
-          const toId = addedIds[0];
-          const fromName = oldAssigneeMap.get(fromId) ?? "thành viên";
-          notifPayloads.push({
-            userId: toId,
-            actorId,
-            projectId: task.projectId,
-            taskId: task.id,
-            type: NotificationType.TASK_ASSIGNED,
-            title: "Chuyển giao nhiệm vụ",
-            content: `Bạn vừa được chuyển giao nhiệm vụ "${updatedTask.title}" từ ${fromName}.`,
-            data: { projectId: task.projectId, taskId: task.id },
           });
-        } else if (addedIds.length > 0) {
-          // 2. Thành viên mới được gán
-          for (const aId of addedIds) {
+          hasLogged = true;
+        }
+
+        // Ghi log khi đổi mô tả
+        if (
+          dto.description !== undefined &&
+          (dto.description?.trim() ?? null) !== (task.description ?? null)
+        ) {
+          await tx.activityLog.create({
+            data: {
+              projectId: task.projectId,
+              actorId,
+              action: "TASK_UPDATED",
+              entityType: "TASK",
+              entityId: task.id,
+              metadata: {
+                changeType: "DESCRIPTION",
+                field: "description",
+              },
+            },
+          });
+          hasLogged = true;
+        }
+
+        if (!hasLogged) {
+          await tx.activityLog.create({
+            data: {
+              projectId: task.projectId,
+              actorId,
+              action: "TASK_UPDATED",
+              entityType: "TASK",
+              entityId: task.id,
+            },
+          });
+        }
+
+        const notifPayloads: Array<{
+          userId: string;
+          actorId: string;
+          projectId: string;
+          taskId: string;
+          type: NotificationType;
+          title: string;
+          content: string;
+          data: Record<string, unknown>;
+        }> = [];
+
+        if (this.notifications) {
+          // 1. Chuyển giao trực tiếp
+          if (removedIds.length === 1 && addedIds.length === 1) {
+            const fromId = removedIds[0];
+            const toId = addedIds[0];
+            const fromName = oldAssigneeMap.get(fromId) ?? "thành viên";
             notifPayloads.push({
-              userId: aId,
+              userId: toId,
               actorId,
               projectId: task.projectId,
               taskId: task.id,
               type: NotificationType.TASK_ASSIGNED,
-              title: "Phân công nhiệm vụ",
-              content: `Bạn đã được phân công vào nhiệm vụ "${updatedTask.title}".`,
+              title: "Chuyển giao nhiệm vụ",
+              content: `Bạn vừa được chuyển giao nhiệm vụ "${updatedTask.title}" từ ${fromName}.`,
               data: { projectId: task.projectId, taskId: task.id },
             });
-          }
-        }
-
-        // 3. Thay đổi hạn hoàn thành (deadline)
-        if (dto.dueDate !== undefined && oldDue !== newDue) {
-          const currentAssignees = updatedTask.assignments || [];
-          for (const a of currentAssignees) {
-            if (!addedIds.includes(a.userId)) {
+          } else if (addedIds.length > 0) {
+            // 2. Thành viên mới được gán
+            for (const aId of addedIds) {
               notifPayloads.push({
-                userId: a.userId,
+                userId: aId,
                 actorId,
                 projectId: task.projectId,
                 taskId: task.id,
-                type: NotificationType.TASK_DUE_DATE_CHANGED,
-                title: "Cập nhật thời hạn nhiệm vụ",
-                content: `Thời hạn hoàn thành của nhiệm vụ "${updatedTask.title}" đã được thay đổi.`,
+                type: NotificationType.TASK_ASSIGNED,
+                title: "Phân công nhiệm vụ",
+                content: `Bạn đã được phân công vào nhiệm vụ "${updatedTask.title}".`,
                 data: { projectId: task.projectId, taskId: task.id },
               });
             }
           }
-        }
-      }
 
-      return { updatedTask, notifPayloads };
-    });
+          // 3. Thay đổi hạn hoàn thành (deadline)
+          if (dto.dueDate !== undefined && oldDue !== newDue) {
+            const currentAssignees = updatedTask.assignments || [];
+            for (const a of currentAssignees) {
+              if (!addedIds.includes(a.userId)) {
+                notifPayloads.push({
+                  userId: a.userId,
+                  actorId,
+                  projectId: task.projectId,
+                  taskId: task.id,
+                  type: NotificationType.TASK_DUE_DATE_CHANGED,
+                  title: "Cập nhật thời hạn nhiệm vụ",
+                  content: `Thời hạn hoàn thành của nhiệm vụ "${updatedTask.title}" đã được thay đổi.`,
+                  data: { projectId: task.projectId, taskId: task.id },
+                });
+              }
+            }
+          }
+        }
+
+        return { updatedTask, notifPayloads };
+      },
+    );
 
     if (this.notifications && notifPayloads.length > 0) {
       await this.notifications.createMany(notifPayloads);
