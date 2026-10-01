@@ -1,6 +1,10 @@
-import { IsInt, IsString, Min } from "class-validator";
+import { IsInt, IsOptional, IsString, Min } from "class-validator";
 
 export class MoveTaskDto {
+  @IsOptional()
+  @IsString()
+  sourceColumnId?: string;
+
   @IsString()
   targetColumnId: string;
 

@@ -42,44 +42,86 @@ Docker:
 
 ## 2. Chạy bằng Docker
 
+### Lần đầu clone về
+
 ```bash
+# 1. Tạo file .env
 cp .env.example .env
+# Điền các giá trị thật vào .env (JWT secrets, v.v.)
+
+# 2. Build và khởi động toàn bộ services
 docker compose up --build
+
+# 3. Chạy migration (mở terminal mới)
+docker compose exec backend npx prisma migrate deploy
+
+# 4. Seed dữ liệu mẫu
+docker compose exec backend npx tsx prisma/seed.ts
 ```
 
-Sau khi backend khởi động lần đầu, chạy migration:
+Truy cập: **http://localhost**
+
+### Khi pull code mới về (có migration mới)
 
 ```bash
+git pull
+docker compose up --build
 docker compose exec backend npx prisma migrate deploy
 ```
 
-Seed:
+### Dừng / khởi động lại
 
 ```bash
-docker compose exec backend npm run prisma:seed
+# Dừng
+docker compose down
+
+# Khởi động lại (không cần build lại)
+docker compose up
+
+# Xoá toàn bộ data (reset DB)
+docker compose down -v
+docker compose up --build
+docker compose exec backend npx prisma migrate deploy
+docker compose exec backend npx tsx prisma/seed.ts
 ```
 
-## 3. Chạy development
+## 3. Chạy development (local, không dùng Docker)
 
-### Backend
+> Yêu cầu: PostgreSQL đang chạy local, đã tạo database `project_management`.
+
+### Lần đầu clone về
+
+**Backend:**
 
 ```bash
 cd backend
 cp .env.example .env
+# Sửa DATABASE_URL trong .env trỏ đến DB local
 npm install
-npx prisma generate
-npx prisma migrate dev --name init
-npm run prisma:seed
+npx prisma migrate deploy
+npx tsx prisma/seed.ts
 npm run start:dev
 ```
 
-### Frontend
+**Frontend:**
 
 ```bash
 cd frontend
 cp .env.example .env
 npm install
 npm run dev
+```
+
+### Khi pull code mới về
+
+```bash
+git pull
+
+# Nếu có migration mới:
+cd backend && npx prisma migrate deploy
+
+# Nếu có package mới:
+npm install
 ```
 
 ## 4. Tài khoản seed
@@ -96,7 +138,43 @@ Member@123
 
 CHỈ dùng cho development.
 
-## 5. Quy ước kiến trúc Backend
+## 5. Workflow khi thay đổi schema Prisma
+
+> Áp dụng khi bạn thêm/sửa/xoá model trong `backend/prisma/schema.prisma`.
+
+### Người thực hiện thay đổi schema
+
+```bash
+# 1. Sửa schema.prisma theo nhu cầu
+
+# 2. Tạo migration file (chạy trên máy local, KHÔNG trong Docker)
+cd backend
+npx prisma migrate dev --name <tên_thay_đổi>
+# Ví dụ: npx prisma migrate dev --name add_comment_table
+
+# 3. Commit CẢ migration file lên git
+git add prisma/migrations
+git commit -m "feat(<module>): <TenBạn> add <tên_thay_đổi>"
+git push
+```
+
+> ⚠️ **Không bao giờ** sửa file trong `prisma/migrations/` sau khi đã commit/merge.
+
+### Người khác trong team (khi pull về có migration mới)
+
+```bash
+git pull
+
+# Docker:
+docker compose exec backend npx prisma migrate deploy
+
+# Local:
+cd backend && npx prisma migrate deploy
+```
+
+---
+
+## 6. Quy ước kiến trúc Backend
 
 Không chia toàn dự án thành `controllers/`, `services/`, `dto/`.
 
@@ -131,7 +209,7 @@ Prisma:
 - Chỉ truy cập qua `PrismaService`.
 - Không new PrismaClient rải rác.
 
-## 6. Quy ước RBAC
+## 7. Quy ước RBAC
 
 ### System role
 
@@ -157,7 +235,7 @@ Một user có thể OWNER ở Project A nhưng MEMBER ở Project B.
 
 Không lưu `projectRole` trực tiếp trong bảng User.
 
-## 7. Invariants bắt buộc
+## 8. Invariants bắt buộc
 
 1. Tạo project phải chạy transaction:
    - tạo Project;
@@ -185,7 +263,7 @@ Không lưu `projectRole` trực tiếp trong bảng User.
 
 7. Archived project là read-only.
 
-## 8. API prefix
+## 9. API prefix
 
 ```text
 /api/v1
@@ -197,7 +275,7 @@ Health check:
 GET /api/v1/health
 ```
 
-## 9. Branch convention
+## 10. Branch convention
 
 ```text
 main
@@ -213,7 +291,7 @@ Trước khi code hay sửa 1 chức năng nào thì hãy tạo branch mới t�
 
 Không push thẳng vào `develop` và `main`.
 
-## 10. Commit convention
+## 11. Commit convention
 Commit theo chức năng thay đổi (feat(tính năng mới), fix(sửa lỗi), refactor(cải tiến), docs(tài liệu), style(thay đổi về định dạng), test(kiểm thử)). 
 - Chia nhỏ commit. Không thay đổi quá nhiều thứ vào 1 commit.
 ```text
@@ -224,7 +302,7 @@ refactor(project): QuanNH extract permission policy
 docs(readme): QuanNH update docker guide
 ```
 
-## 11. Pull Request checklist
+## 12. Pull Request checklist
 - [ ] Build pass
 - [ ] Lint pass
 - [ ] DTO có validation

@@ -10,6 +10,10 @@ import { ProjectsModule } from "./modules/projects/projects.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
 import { UsersModule } from "./modules/users/users.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { ChecklistsModule } from "./modules/checklists/checklists.module";
+import { CommentsModule } from "./modules/comments/comments.module";
+import { AdminModule } from "./modules/admin/admin.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 
 @Module({
   imports: [
@@ -24,6 +28,10 @@ import { PrismaModule } from "./prisma/prisma.module";
     TasksModule,
     DashboardModule,
     ActivityLogsModule,
+    ChecklistsModule,
+    CommentsModule,
+    AdminModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

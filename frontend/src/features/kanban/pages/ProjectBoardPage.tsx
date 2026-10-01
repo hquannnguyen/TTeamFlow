@@ -1,47 +1,1023 @@
-import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
-import { getBoard } from '../api/kanban.api';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  getBoard,
+  moveTask,
+  deleteTask,
+  createColumn,
+  updateColumn,
+  deleteColumn,
+  reorderColumns,
+  type KanbanTask,
+  type KanbanColumn,
+} from '../api/kanban.api';
+import { getProjects, getProject } from '../../projects/api/projects.api';
+import { ProjectSelectDropdown } from '../../projects/components/ProjectSelectDropdown';
+import { KanbanTaskCard } from '../components/KanbanTaskCard';
+import { CreateTaskModal } from '../components/CreateTaskModal';
+import { KanbanListView } from '../components/KanbanListView';
+import { AddMemberModal } from '../../members/components/AddMemberModal';
+import { useAuthStore } from '../../auth/store/auth.store';
+import { toast } from '../../../components/ui/toast.store';
+import { getMediaUrl } from '../../../api/http';
+import { useActiveProjectStore } from '../../projects/store/active-project.store';
+import { broadcastNotificationUpdate } from '../../notifications/utils/broadcast.util';
 
 export function ProjectBoardPage() {
-  const { projectId = '' } = useParams();
+  const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { activeProjectId, setActiveProjectId } = useActiveProjectStore();
 
-  const query = useQuery({
-    queryKey: ['kanban', projectId],
-    queryFn: () => getBoard(projectId),
-    enabled: Boolean(projectId),
+  // 1. Fetch user's projects to allow quick switching
+  const { data: projects = [], isLoading: isLoadingProjects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => getProjects(),
   });
 
-  if (query.isLoading) return <p>Đang tải Kanban...</p>;
-  if (query.isError) return <p>Không thể tải Kanban.</p>;
+  // Effective projectId: URL param (if in projects) or activeProjectId (if in projects) or first available project
+  const currentProjectId = useMemo(() => {
+    if (projectId && projects.some((p) => p.id === projectId)) {
+      return projectId;
+    }
+    if (activeProjectId && projects.some((p) => p.id === activeProjectId)) {
+      return activeProjectId;
+    }
+    return projects.length > 0 ? projects[0].id : '';
+  }, [projectId, activeProjectId, projects]);
+
+  // Đồng bộ activeProjectId khi currentProjectId được xác định
+  useEffect(() => {
+    if (currentProjectId && currentProjectId !== activeProjectId) {
+      setActiveProjectId(currentProjectId);
+    }
+  }, [currentProjectId, activeProjectId, setActiveProjectId]);
+
+  // Cập nhật URL nếu đang ở /board hoặc /kanban nhưng đã có currentProjectId
+  useEffect(() => {
+    if (!projectId && currentProjectId) {
+      navigate(`/projects/${currentProjectId}/board`, { replace: true });
+    }
+  }, [projectId, currentProjectId, navigate]);
+
+  // 2. Fetch active project details (name, key, members)
+  const { data: project } = useQuery({
+    queryKey: ['project', currentProjectId],
+    queryFn: () => getProject(currentProjectId),
+    enabled: Boolean(currentProjectId),
+  });
+
+  // 3. Fetch Kanban board columns & tasks
+  const {
+    data: columns = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['kanban', currentProjectId],
+    queryFn: () => getBoard(currentProjectId),
+    enabled: Boolean(currentProjectId),
+  });
+
+  // Filters state
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('ALL');
+  const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
+  const [onlyOverdue, setOnlyOverdue] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
+
+  // Modals state
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createDefaultColumnId, setCreateDefaultColumnId] = useState<string>('');
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+
+  // Current user & RBAC permission to invite members
+  const currentUser = useAuthStore((s) => s.user);
+  const isArchived = project?.status === 'ARCHIVED';
+
+  const canInviteMembers = useMemo(() => {
+    if (isArchived) return false;
+    if (!currentUser) return false;
+    if (currentUser.systemRole === 'ADMIN') return true;
+    if (!project?.members) return false;
+    const myMembership = project.members.find(
+      (m) => m.user?.id === currentUser.id,
+    );
+    return myMembership?.role === 'OWNER' || myMembership?.role === 'MANAGER';
+  }, [currentUser, project, isArchived]);
+
+  // Drag & drop drop target state
+  const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
+
+  // Column management state (6.3.2)
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
+  const [editingColumnName, setEditingColumnName] = useState('');
+  const [deletingColumn, setDeletingColumn] = useState<KanbanColumn | null>(null);
+
+  // Move Task Mutation (Task 17 API)
+  const moveTaskMutation = useMutation({
+    mutationFn: ({
+      taskId,
+      targetColumnId,
+      newPosition,
+    }: {
+      taskId: string;
+      targetColumnId: string;
+      newPosition: number;
+    }) => moveTask(taskId, targetColumnId, newPosition),
+    onMutate: async ({ taskId, targetColumnId }) => {
+      await queryClient.cancelQueries({ queryKey: ['kanban'] });
+      const previousBoard = queryClient.getQueryData<KanbanColumn[]>(['kanban', currentProjectId]);
+
+      if (previousBoard) {
+        let movedTask: KanbanTask | null = null;
+        for (const col of previousBoard) {
+          const t = col.tasks.find((task) => task.id === taskId);
+          if (t) {
+            movedTask = { ...t, columnId: targetColumnId };
+            break;
+          }
+        }
+
+        if (movedTask) {
+          const nextBoard = previousBoard.map((col) => {
+            const filteredTasks = col.tasks.filter((t) => t.id !== taskId);
+            if (col.id === targetColumnId) {
+              return {
+                ...col,
+                tasks: [...filteredTasks, movedTask!],
+              };
+            }
+            return {
+              ...col,
+              tasks: filteredTasks,
+            };
+          });
+
+          queryClient.setQueryData(['kanban', currentProjectId], nextBoard);
+        }
+      }
+
+      return { previousBoard };
+    },
+    onSuccess: (_data, variables) => {
+      // Optimistically update taskDetail cache if loaded
+      queryClient.setQueryData<KanbanTask>(['taskDetail', variables.taskId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          columnId: variables.targetColumnId,
+        };
+      });
+
+      // Invalidate all related queries so board, list view, task details, and activity feeds refresh immediately
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['taskDetail'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      broadcastNotificationUpdate();
+    },
+    onError: (err: unknown, _vars, context) => {
+      if (context?.previousBoard) {
+        queryClient.setQueryData(['kanban', currentProjectId], context.previousBoard);
+      }
+      const responseData =
+        typeof err === 'object' && err !== null && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data
+          : undefined;
+      const msg = responseData?.message || 'Không thể di chuyển nhiệm vụ';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['taskDetail'] });
+    },
+  });
+
+  // Delete Task Mutation
+  const deleteTaskMutation = useMutation({
+    mutationFn: (taskId: string) => deleteTask(taskId),
+    onSuccess: () => {
+      toast.success('Xóa nhiệm vụ thành công');
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể xóa nhiệm vụ';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
+  // Create Column Mutation (6.3.2)
+  const createColumnMutation = useMutation({
+    mutationFn: (name: string) => createColumn(currentProjectId, name),
+    onSuccess: () => {
+      toast.success('Thêm cột mới thành công');
+      setIsAddingColumn(false);
+      setNewColumnName('');
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể thêm cột mới';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
+  // Update Column Mutation (6.3.2 Rename)
+  const updateColumnMutation = useMutation({
+    mutationFn: ({ columnId, name }: { columnId: string; name: string }) =>
+      updateColumn(currentProjectId, columnId, { name }),
+    onSuccess: () => {
+      toast.success('Đổi tên cột thành công');
+      setEditingColumnId(null);
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể đổi tên cột';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
+  // Delete Column Mutation (6.3.2 Delete)
+  const deleteColumnMutation = useMutation({
+    mutationFn: ({ columnId }: { columnId: string }) =>
+      deleteColumn(currentProjectId, columnId),
+    onSuccess: () => {
+      toast.success('Xóa cột thành công');
+      setDeletingColumn(null);
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể xóa cột';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
+  // Reorder Columns Mutation (6.3.2 Reorder)
+  const reorderColumnsMutation = useMutation({
+    mutationFn: (newCols: Array<{ id: string; position: number }>) =>
+      reorderColumns(currentProjectId, newCols),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Không thể đổi thứ tự cột';
+      toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    },
+  });
+
+  const handleMoveTask = (taskId: string, targetColumnId: string) => {
+    const targetCol = columns.find((c) => c.id === targetColumnId);
+    const maxPos = targetCol?.tasks.reduce((max, t) => Math.max(max, t.position), 0) ?? 0;
+    const newPosition = maxPos + 1000;
+    moveTaskMutation.mutate({ taskId, targetColumnId, newPosition });
+  };
+
+  const handleCreateColumn = () => {
+    if (!newColumnName.trim()) {
+      toast.error('Vui lòng nhập tên cột');
+      return;
+    }
+    createColumnMutation.mutate(newColumnName.trim());
+  };
+
+  const handleSaveRenameColumn = (columnId: string) => {
+    if (!editingColumnName.trim()) {
+      setEditingColumnId(null);
+      return;
+    }
+    updateColumnMutation.mutate({ columnId, name: editingColumnName.trim() });
+  };
+
+  const handleConfirmDeleteColumn = () => {
+    if (!deletingColumn) return;
+    deleteColumnMutation.mutate({
+      columnId: deletingColumn.id,
+    });
+  };
+
+  // Filter tasks in columns
+  const filteredColumns = useMemo(() => {
+    return columns.map((col) => {
+      const filteredTasks = col.tasks.filter((task) => {
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchTitle = task.title.toLowerCase().includes(q);
+          const matchDesc = task.description?.toLowerCase().includes(q);
+          const matchNum = String(task.taskNumber || '').includes(q);
+          if (!matchTitle && !matchDesc && !matchNum) return false;
+        }
+
+        if (selectedAssignee !== 'ALL') {
+          const hasAssignee = task.assignments?.some((a) => a.user.id === selectedAssignee);
+          if (!hasAssignee) return false;
+        }
+
+        if (selectedPriority !== 'ALL') {
+          if (task.priority !== selectedPriority) return false;
+        }
+
+        if (onlyOverdue) {
+          if (!task.dueDate || task.completedAt || col.isCompleted) return false;
+          const isLate = new Date(task.dueDate).getTime() < Date.now();
+          if (!isLate) return false;
+        }
+
+        return true;
+      });
+
+      return {
+        ...col,
+        tasks: filteredTasks,
+      };
+    });
+  }, [columns, searchQuery, selectedAssignee, selectedPriority, onlyOverdue]);
+
+  if (isLoadingProjects || (Boolean(currentProjectId) && isLoading)) {
+    return (
+      <div className="kanban-page-container" style={{ padding: '60px 20px', textAlign: 'center' }}>
+        <div className="spinner-ring" style={{ margin: '0 auto 16px' }} />
+        <p style={{ color: '#64748b', fontSize: '14px' }}>Đang tải bảng Kanban...</p>
+      </div>
+    );
+  }
+
+  if (!currentProjectId && projects.length === 0) {
+    return (
+      <div className="kanban-page-container" style={{ padding: '60px 20px', textAlign: 'center' }}>
+        <div
+          style={{
+            maxWidth: '480px',
+            margin: '40px auto',
+            background: '#ffffff',
+            borderRadius: '16px',
+            padding: '40px 24px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+          }}
+        >
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              background: '#eef2ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 20px',
+              color: '#4f46e5',
+            }}
+          >
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M9 3v18" />
+              <path d="M15 3v18" />
+            </svg>
+          </div>
+          <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+            Chưa có dự án nào
+          </h2>
+          <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.6', marginBottom: '24px' }}>
+            Bạn cần có ít nhất 1 dự án để quản lý công việc và xem bảng Kanban. Vui lòng tạo dự án mới để bắt đầu.
+          </p>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => navigate('/projects')}
+            style={{
+              padding: '10px 24px',
+              borderRadius: '8px',
+              fontWeight: '600',
+              fontSize: '14px',
+            }}
+          >
+            + Tạo dự án mới
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError || !currentProjectId) {
+    return (
+      <div className="kanban-page-container" style={{ padding: '40px', textAlign: 'center' }}>
+        <p style={{ color: '#ef4444', fontSize: '15px' }}>
+          Không thể tải dữ liệu bảng Kanban hoặc dự án không tồn tại.
+        </p>
+        <button
+          type="button"
+          className="btn-primary"
+          style={{ marginTop: '16px' }}
+          onClick={() => navigate('/projects')}
+        >
+          Quay lại danh sách dự án
+        </button>
+      </div>
+    );
+  }
+
 
   return (
-    <section>
-      <div className="page-heading">
-        <div>
-          <h1>Kanban Board</h1>
-          <p className="muted">
-            Base UI. Dev Kanban sẽ gắn dnd-kit và optimistic update tại đây.
-          </p>
+    <div className="kanban-page-container">
+      {/* ── Top Header Section (Matching Stitch Design) ── */}
+      <div className="kanban-header-wrap">
+        <div className="kanban-header-top">
+          {/* Title & Status Area */}
+          <div className="kanban-title-area">
+            <ProjectSelectDropdown
+              projects={projects}
+              currentProjectId={currentProjectId}
+              onSelectProject={(selectedId) => {
+                setActiveProjectId(selectedId);
+                navigate(`/projects/${selectedId}/board`);
+              }}
+              variant="title"
+              status={project?.status}
+              showStatusBadge={true}
+            />
+          </div>
+
+          {/* Right Header Controls */}
+          <div className="kanban-header-actions">
+            {/* Members Avatar Group */}
+            <div className="kanban-avatar-group">
+              {project?.members && project.members.length > 0 ? (
+                project.members.slice(0, 3).map((m) => {
+                  const avatar = getMediaUrl(m.user.avatarUrl);
+                  return avatar ? (
+                    <img
+                      key={m.user.id}
+                      src={avatar}
+                      alt={m.user.fullName}
+                      className="kanban-avatar-item"
+                      title={m.user.fullName}
+                    />
+                  ) : (
+                    <div
+                      key={m.user.id}
+                      className="kanban-avatar-item"
+                      title={m.user.fullName}
+                    >
+                      {m.user.fullName.charAt(0).toUpperCase()}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="kanban-avatar-item">P</div>
+              )}
+              {project?.members && project.members.length > 3 && (
+                <div className="kanban-avatar-item kanban-avatar-more">
+                  +{project.members.length - 3}
+                </div>
+              )}
+            </div>
+
+            {/* Invite Button - only for OWNER / MANAGER / ADMIN */}
+            {canInviteMembers && (
+              <button
+                type="button"
+                className="btn-invite-members"
+                onClick={() => setIsInviteModalOpen(true)}
+                title="Mời thành viên mới vào dự án"
+              >
+                + Mời
+              </button>
+            )}
+
+            {/* View Switcher: Board vs List */}
+            <div className="kanban-view-switcher">
+              <button
+                type="button"
+                className={`kanban-view-btn ${viewMode === 'board' ? 'active' : ''}`}
+                onClick={() => setViewMode('board')}
+                title="Bảng Kanban"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="18" height="18" x="3" y="3" rx="2" />
+                  <path d="M9 3v18" />
+                  <path d="M15 3v18" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className={`kanban-view-btn ${viewMode === 'list' ? 'active' : ''}`}
+                onClick={() => setViewMode('list')}
+                title="Dạng danh sách"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" x2="21" y1="6" y2="6" />
+                  <line x1="8" x2="21" y1="12" y2="12" />
+                  <line x1="8" x2="21" y1="18" y2="18" />
+                  <line x1="3" x2="3.01" y1="6" y2="6" />
+                  <line x1="3" x2="3.01" y1="12" y2="12" />
+                  <line x1="3" x2="3.01" y1="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters Bar (Matching Stitch Design) */}
+        <div className="kanban-filters-bar">
+          <div className="kanban-filters-left">
+            <select
+              className="kanban-filter-pill"
+              value={selectedAssignee}
+              onChange={(e) => setSelectedAssignee(e.target.value)}
+            >
+              <option value="ALL">Người thực hiện: Tất cả</option>
+              {project?.members?.map((m) => (
+                <option key={m.user.id} value={m.user.id}>
+                  {m.user.fullName}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="kanban-filter-pill"
+              value={selectedPriority}
+              onChange={(e) => setSelectedPriority(e.target.value)}
+            >
+              <option value="ALL">Độ ưu tiên: Tất cả</option>
+              <option value="HIGH">Cao / Khẩn cấp</option>
+              <option value="MEDIUM">Trung bình</option>
+              <option value="LOW">Thấp</option>
+            </select>
+
+            <button
+              type="button"
+              className={`kanban-filter-pill ${onlyOverdue ? 'active' : ''}`}
+              onClick={() => setOnlyOverdue(!onlyOverdue)}
+            >
+              Quá hạn {onlyOverdue ? '✓' : ''}
+            </button>
+          </div>
+
+          <div className="kanban-search-wrap">
+            <svg
+              className="kanban-search-icon"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input
+              type="text"
+              className="kanban-search-input"
+              placeholder="Tìm theo tên hoặc mã..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="kanban-search-clear-btn"
+                onClick={() => setSearchQuery('')}
+                title="Xóa tìm kiếm"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="kanban-board">
-        {query.data?.map((column) => (
-          <div className="kanban-column" key={column.id}>
-            <div className="kanban-column-title">
-              <strong>{column.name}</strong>
-              <span>{column.tasks.length}</span>
+      {/* Archived Project Read-Only Banner */}
+      {isArchived && (
+        <div className="members-archived-banner" style={{ margin: '0 24px 12px' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect width="20" height="5" x="2" y="3" rx="1" />
+            <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+            <path d="M10 12h4" />
+          </svg>
+          <span>
+            <strong>Dự án đã được lưu trữ (ARCHIVED):</strong> Bảng công việc đang ở chế độ chỉ đọc. Không thể thêm, sửa, xóa, mời thành viên hoặc di chuyển công việc cho đến khi dự án được khôi phục trạng thái hoạt động.
+          </span>
+        </div>
+      )}
+
+      {/* ── Main Content: Kanban Board vs List View ── */}
+      {viewMode === 'board' ? (
+        <div className="kanban-columns-scroll-area">
+        {filteredColumns.map((column) => {
+          const colNameUpper = column.name.toUpperCase();
+          const colType = column.isCompleted || colNameUpper.includes('DONE') || colNameUpper.includes('XONG')
+            ? 'done'
+            : colNameUpper.includes('DOING') || colNameUpper.includes('THỰC HIỆN')
+            ? 'doing'
+            : 'todo';
+
+          const isDragOver = !isArchived && dragOverColumnId === column.id;
+
+          return (
+            <div
+              className={`kanban-column-card ${isDragOver ? 'drag-over' : ''}`}
+              key={column.id}
+              onDragOver={(e) => {
+                if (isArchived) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                if (dragOverColumnId !== column.id) {
+                  setDragOverColumnId(column.id);
+                }
+              }}
+              onDragLeave={(e) => {
+                if (isArchived) return;
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                setDragOverColumnId(null);
+              }}
+              onDrop={(e) => {
+                if (isArchived) return;
+                e.preventDefault();
+                setDragOverColumnId(null);
+                let rawData = e.dataTransfer.getData('text/plain');
+                if (!rawData) {
+                  try {
+                    const json = e.dataTransfer.getData('application/json');
+                    if (json) {
+                      const parsed = JSON.parse(json);
+                      if (parsed.taskId) rawData = parsed.taskId;
+                    }
+                  } catch {
+                    // Ignore parse error
+                  }
+                }
+                if (rawData?.startsWith('column:')) {
+                  const draggedColId = rawData.replace('column:', '');
+                  if (draggedColId && draggedColId !== column.id) {
+                    const fromIndex = columns.findIndex((c) => c.id === draggedColId);
+                    const toIndex = columns.findIndex((c) => c.id === column.id);
+                    if (fromIndex >= 0 && toIndex >= 0) {
+                      const reordered = [...columns];
+                      const [moved] = reordered.splice(fromIndex, 1);
+                      reordered.splice(toIndex, 0, moved);
+                      const payload = reordered.map((c, idx) => ({
+                        id: c.id,
+                        position: (idx + 1) * 1000,
+                      }));
+                      reorderColumnsMutation.mutate(payload);
+                    }
+                  }
+                } else if (rawData) {
+                  const taskId = rawData.replace(/^task:/, '');
+                  if (taskId) {
+                    handleMoveTask(taskId, column.id);
+                  }
+                }
+              }}
+            >
+              {/* Column Header (Draggable for reordering columns) */}
+              <div
+                className={`kanban-col-header-bar ${colType}`}
+                draggable={!isArchived}
+                onDragStart={(e) => {
+                  if (isArchived) {
+                    e.preventDefault();
+                    return;
+                  }
+                  e.dataTransfer.setData('text/plain', `column:${column.id}`);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                style={{ cursor: isArchived ? 'default' : 'grab' }}
+                title={isArchived ? column.name : 'Kéo thả để thay đổi thứ tự cột'}
+              >
+                <div className="kanban-col-title-group">
+                  {!isArchived && (
+                    <div className="kanban-col-drag-handle" title="Kéo thả để thay đổi thứ tự cột">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="9" cy="5" r="1" fill="currentColor"/>
+                        <circle cx="9" cy="12" r="1" fill="currentColor"/>
+                        <circle cx="9" cy="19" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="5" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="12" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="19" r="1" fill="currentColor"/>
+                      </svg>
+                    </div>
+                  )}
+                  <span className={`kanban-col-dot ${colType}`} />
+
+                  {/* Inline Rename Column (6.3.2) */}
+                  {!isArchived && editingColumnId === column.id ? (
+                    <input
+                      type="text"
+                      className="kanban-col-name-input"
+                      autoFocus
+                      value={editingColumnName}
+                      onChange={(e) => setEditingColumnName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleSaveRenameColumn(column.id);
+                        if (e.key === 'Escape') setEditingColumnId(null);
+                      }}
+                      onBlur={() => handleSaveRenameColumn(column.id)}
+                    />
+                  ) : (
+                    <span
+                      className="kanban-col-name"
+                      title={isArchived ? column.name : 'Double click để đổi tên cột'}
+                      onDoubleClick={() => {
+                        if (isArchived) return;
+                        setEditingColumnId(column.id);
+                        setEditingColumnName(column.name);
+                      }}
+                    >
+                      {column.name}
+                    </span>
+                  )}
+
+                  <span className="kanban-col-count-pill">{column.tasks.length}</span>
+                </div>
+
+                {!isArchived && (
+                  <div className="kanban-col-header-actions">
+                    {/* Add Task to Column */}
+                    <button
+                      type="button"
+                      className="kanban-col-icon-btn"
+                      title="Thêm nhiệm vụ vào cột này"
+                      onClick={() => {
+                        setCreateDefaultColumnId(column.id);
+                        setIsCreateModalOpen(true);
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" x2="12" y1="5" y2="19" />
+                        <line x1="5" x2="19" y1="12" y2="12" />
+                      </svg>
+                    </button>
+
+                    {/* Delete Column (6.3.2) */}
+                    <button
+                      type="button"
+                      className="kanban-col-icon-btn delete"
+                      title="Xóa cột này"
+                      onClick={() => {
+                        setDeletingColumn(column);
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Tasks List Box */}
+              <div
+                className="kanban-tasks-list-box"
+                onDragOver={(e) => {
+                  if (isArchived) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverColumnId !== column.id) {
+                    setDragOverColumnId(column.id);
+                  }
+                }}
+              >
+                {column.tasks.length === 0 ? (
+                  <div
+                    style={{
+                      padding: '24px 16px',
+                      textAlign: 'center',
+                      color: '#94a3b8',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    Chưa có nhiệm vụ
+                  </div>
+                ) : (
+                  column.tasks.map((task) => (
+                    <KanbanTaskCard
+                      key={task.id}
+                      task={task}
+                      projectKey={project?.projectKey || 'TTF'}
+                      isCompletedColumn={column.isCompleted}
+                      isArchived={isArchived}
+                      onDeleteTask={(taskId) => deleteTaskMutation.mutate(taskId)}
+                      onClick={() => {
+                        navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* ── Add New Column Card (6.3.2 Thêm cột) ── */}
+        {!isArchived && (
+          isAddingColumn ? (
+            <div className="kanban-column-card" style={{ padding: '16px', gap: '12px' }}>
+              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>Thêm cột mới</h4>
+              <input
+                type="text"
+                className="kanban-col-name-input"
+                style={{ width: '100%' }}
+                placeholder="Nhập tên cột trạng thái..."
+                autoFocus
+                value={newColumnName}
+                onChange={(e) => setNewColumnName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateColumn();
+                  if (e.key === 'Escape') setIsAddingColumn(false);
+                }}
+              />
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                  onClick={() => setIsAddingColumn(false)}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                  onClick={handleCreateColumn}
+                >
+                  Thêm cột
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="kanban-add-column-card" onClick={() => setIsAddingColumn(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="19" x2="19" y2="12" />
+              </svg>
+              <span style={{ fontSize: '13.5px', fontWeight: 600, color: '#4f46e5' }}>+ Thêm cột mới</span>
+            </div>
+          )
+        )}
+      </div>
+    ) : (
+      <KanbanListView
+        columns={filteredColumns}
+        allColumns={columns}
+        projectKey={project?.projectKey || 'TTF'}
+        isArchived={isArchived}
+        onTaskClick={(task) => {
+          navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
+        }}
+        onMoveTask={(taskId, targetColumnId) => {
+          handleMoveTask(taskId, targetColumnId);
+        }}
+        onDeleteTask={(taskId) => {
+          deleteTaskMutation.mutate(taskId);
+        }}
+        onAddTask={(columnId) => {
+          setCreateDefaultColumnId(columnId);
+          setIsCreateModalOpen(true);
+        }}
+      />
+    )}
+
+      {/* Delete Column Transfer Modal (6.3.2) */}
+      {deletingColumn && (
+        <div className="modal-overlay" onClick={() => setDeletingColumn(null)}>
+          <div className="delete-column-dialog" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="delete-column-header">
+              <div className="delete-column-header-left">
+                <div className="delete-column-icon-wrap">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                    <line x1="10" y1="11" x2="10" y2="17" />
+                    <line x1="14" y1="11" x2="14" y2="17" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="delete-column-title">Xóa cột "{deletingColumn.name}"</h3>
+                  <p className="delete-column-subtitle">Thao tác này sẽ xóa cột khỏi bảng Kanban</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="delete-column-close-btn"
+                onClick={() => setDeletingColumn(null)}
+                aria-label="Đóng"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
             </div>
 
-            {column.tasks.map((task) => (
-              <article className="task-card" key={task.id}>
-                <strong>{task.title}</strong>
-                <small>{task.priority}</small>
-              </article>
-            ))}
+            {/* Body */}
+            <div className="delete-column-body">
+              {deletingColumn.tasks && deletingColumn.tasks.length > 0 ? (
+                <div className="delete-column-warning-card">
+                  <div className="delete-column-warning-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  </div>
+                  <div className="delete-column-warning-content">
+                    <span className="delete-column-warning-title">
+                      Cột đang chứa {deletingColumn.tasks.length} công việc
+                    </span>
+                    <p className="delete-column-warning-desc">
+                      Cột <strong>"{deletingColumn.name}"</strong> hiện đang chứa <strong>{deletingColumn.tasks.length}</strong> công việc. Thao tác này sẽ xóa cột và toàn bộ công việc bên trong khỏi bảng Kanban.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="delete-column-empty-card">
+                  <p style={{ color: '#475569', fontSize: '14px', margin: 0, lineHeight: 1.6 }}>
+                    Bạn có chắc chắn muốn xóa cột <strong>"{deletingColumn.name}"</strong>? Thao tác này không thể hoàn tất nếu không tạo lại cột.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="delete-column-footer">
+              <button
+                type="button"
+                className="btn-cancel-delete"
+                onClick={() => setDeletingColumn(null)}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                className="btn-confirm-delete"
+                disabled={deleteColumnMutation.isPending}
+                onClick={handleConfirmDeleteColumn}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+                Xác nhận xóa
+              </button>
+            </div>
           </div>
-        ))}
-      </div>
-    </section>
+        </div>
+      )}
+
+      {/* Create Task Modal */}
+      <CreateTaskModal
+        projectId={currentProjectId}
+        columns={columns}
+        defaultColumnId={createDefaultColumnId}
+        members={project?.members}
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onTaskCreated={(newTask) => {
+          navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${newTask.id}` : `/tasks/${newTask.id}`);
+        }}
+      />
+
+      {/* Add / Invite Member Modal */}
+      {currentProjectId && (
+        <AddMemberModal
+          isOpen={isInviteModalOpen}
+          onClose={() => setIsInviteModalOpen(false)}
+          projectId={currentProjectId}
+          projectName={project?.name}
+          onMemberAdded={() => {
+            queryClient.invalidateQueries({ queryKey: ['project', currentProjectId] });
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+          }}
+        />
+      )}
+    </div>
   );
 }

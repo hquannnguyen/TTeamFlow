@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import { ProjectRole } from "@prisma/client";
@@ -32,12 +33,28 @@ export class ProjectRoleGuard implements CanActivate {
         Request & { user: AuthUser; params: Record<string, string> }
       >();
 
+    if (!request.user) {
+      throw new UnauthorizedException("Vui lòng đăng nhập");
+    }
+
     const projectId = request.params.projectId ?? request.params.id;
 
     if (!projectId) {
       throw new ForbiddenException(
         "Không xác định được project để kiểm tra quyền",
       );
+    }
+
+    // SystemRole ADMIN có toàn quyền quản trị trên mọi dự án (chỉ chặn nếu dự án đã bị xóa mềm)
+    if (request.user.systemRole === "ADMIN") {
+      const project = await this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { deletedAt: true },
+      });
+      if (!project || project.deletedAt) {
+        throw new ForbiddenException("Bạn không có quyền trong dự án này");
+      }
+      return true;
     }
 
     const membership = await this.prisma.projectMember.findUnique({
@@ -47,9 +64,18 @@ export class ProjectRoleGuard implements CanActivate {
           userId: request.user.id,
         },
       },
+      include: {
+        project: {
+          select: { deletedAt: true },
+        },
+      },
     });
 
-    if (!membership || !requiredRoles.includes(membership.role)) {
+    if (
+      !membership ||
+      membership.project?.deletedAt ||
+      !requiredRoles.includes(membership.role)
+    ) {
       throw new ForbiddenException("Bạn không có quyền trong dự án này");
     }
 

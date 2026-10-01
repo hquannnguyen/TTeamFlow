@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  UnauthorizedException,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
@@ -24,6 +25,10 @@ export class SystemRoleGuard implements CanActivate {
     const request = context
       .switchToHttp()
       .getRequest<Request & { user: AuthUser }>();
+
+    if (!request.user) {
+      throw new UnauthorizedException("Vui lòng đăng nhập");
+    }
 
     if (!requiredRoles.includes(request.user.systemRole)) {
       throw new ForbiddenException("Bạn không có quyền hệ thống phù hợp");

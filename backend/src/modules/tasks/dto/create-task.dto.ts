@@ -1,44 +1,52 @@
 import { TaskPriority } from "@prisma/client";
+import { Transform } from "class-transformer";
 import {
   ArrayUnique,
   IsArray,
   IsDateString,
   IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
-  MinLength,
 } from "class-validator";
 
 export class CreateTaskDto {
-  @IsString()
-  @MinLength(1)
-  @MaxLength(250)
+  @IsNotEmpty({ message: "Tiêu đề không được để trống" })
+  @IsString({ message: "Tiêu đề phải là chuỗi" })
+  @MaxLength(250, { message: "Tiêu đề tối đa 250 ký tự" })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === "string" ? value.trim() : value,
+  )
   title: string;
 
   @IsOptional()
   @IsString()
   @MaxLength(5000)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === "string" ? value.trim() : value,
+  )
   description?: string;
 
+  @IsNotEmpty({ message: "Cột không được để trống" })
   @IsString()
   columnId: string;
 
   @IsOptional()
-  @IsEnum(TaskPriority)
+  @IsEnum(TaskPriority, { message: "Độ ưu tiên không hợp lệ" })
   priority?: TaskPriority;
 
   @IsOptional()
-  @IsDateString()
+  @IsDateString({}, { message: "Ngày bắt đầu không đúng định dạng ISO" })
   startDate?: string;
 
   @IsOptional()
-  @IsDateString()
+  @IsDateString({}, { message: "Ngày kết thúc không đúng định dạng ISO" })
   dueDate?: string;
 
   @IsOptional()
-  @IsArray()
-  @ArrayUnique()
-  @IsString({ each: true })
+  @IsArray({ message: "Danh sách người thực hiện phải là mảng" })
+  @ArrayUnique({ message: "Người thực hiện không được trùng lặp" })
+  @IsString({ each: true, message: "ID người thực hiện phải là chuỗi" })
   assigneeIds?: string[];
 }

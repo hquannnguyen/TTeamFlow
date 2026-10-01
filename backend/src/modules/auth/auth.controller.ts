@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  Patch,
   Post,
   Req,
   Res,
@@ -12,6 +14,7 @@ import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Public } from "../../common/decorators/public.decorator";
 import type { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { AuthService } from "./auth.service";
+import { ChangePasswordDto } from "./dto/change-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 
@@ -21,6 +24,7 @@ export class AuthController {
 
   @Public()
   @Post("register")
+  @HttpCode(201)
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
@@ -68,12 +72,27 @@ export class AuthController {
     return { accessToken: result.accessToken };
   }
 
+  @Public()
   @Post("logout")
   async logout(
-    @CurrentUser() user: AuthUser,
+    @CurrentUser() user: AuthUser | undefined,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result = await this.authService.logout(user.id);
+    const refreshToken = request.cookies?.refresh_token as string | undefined;
+    const result = await this.authService.logout(user?.id, refreshToken);
+    response.clearCookie("refresh_token", { path: "/api/v1/auth" });
+    return result;
+  }
+
+  @Patch("change-password")
+  @HttpCode(200)
+  async changePassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ChangePasswordDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.authService.changePassword(user.id, dto);
     response.clearCookie("refresh_token", { path: "/api/v1/auth" });
     return result;
   }
