@@ -214,6 +214,7 @@ export function TaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['taskDetail', taskId] });
       queryClient.invalidateQueries({ queryKey: ['kanban', effectiveProjectId] });
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
       toast.success('Đã cập nhật nhiệm vụ');
     },
     onError: (err: unknown) => {
@@ -241,6 +242,7 @@ export function TaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
       queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
       toast.success('Đã chuyển trạng thái');
     },
   });

@@ -3,16 +3,26 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
-import { ProjectRole, ProjectStatus, SystemRole } from "@prisma/client";
+import {
+  NotificationType,
+  ProjectRole,
+  ProjectStatus,
+  SystemRole,
+} from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { MoveTaskDto } from "./dto/move-task.dto";
 import { UpdateTaskDto } from "./dto/update-task.dto";
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
 
   async create(projectId: string, creatorId: string, dto: CreateTaskDto) {
     if (
@@ -49,8 +59,8 @@ export class TasksService {
       _max: { position: true },
     });
 
-    return this.prisma.$transaction(async (tx) => {
-      const task = await tx.task.create({
+    const task = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.task.create({
         data: {
           projectId,
           columnId: dto.columnId,
@@ -85,12 +95,29 @@ export class TasksService {
           actorId: creatorId,
           action: "TASK_CREATED",
           entityType: "TASK",
-          entityId: task.id,
+          entityId: created.id,
         },
       });
 
-      return task;
+      return created;
     });
+
+    if (this.notifications && dto.assigneeIds?.length) {
+      await this.notifications.createMany(
+        dto.assigneeIds.map((userId) => ({
+          userId,
+          actorId: creatorId,
+          projectId,
+          taskId: task.id,
+          type: NotificationType.TASK_ASSIGNED,
+          title: "Phân công nhiệm vụ",
+          content: `Bạn đã được phân công vào nhiệm vụ "${task.title}".`,
+          data: { projectId, taskId: task.id },
+        })),
+      );
+    }
+
+    return task;
   }
 
   async move(
@@ -203,8 +230,51 @@ export class TasksService {
         },
       });
 
-      return updated;
+      let notifPayloads: Array<{
+        userId: string;
+        actorId: string;
+        projectId: string;
+        taskId: string;
+        type: NotificationType;
+        title: string;
+        content: string;
+        data: Record<string, unknown>;
+      }> = [];
+
+      if (this.notifications && updated.assignments?.length) {
+        const title = isNowCompleted
+          ? "Nhiệm vụ đã hoàn thành"
+          : "Trạng thái nhiệm vụ thay đổi";
+        const content = isNowCompleted
+          ? `Nhiệm vụ "${task.title}" đã được hoàn thành (chuyển sang "${target.name}").`
+          : `Nhiệm vụ "${task.title}" đã được chuyển sang "${target.name}".`;
+
+        notifPayloads = updated.assignments.map((a) => ({
+            userId: a.userId,
+            actorId,
+            projectId: task.projectId,
+            taskId: task.id,
+            type: NotificationType.TASK_STATUS_CHANGED,
+            title,
+            content,
+            data: {
+              projectId: task.projectId,
+              taskId: task.id,
+              targetColumnId: target.id,
+              targetColumnName: target.name,
+              isCompleted: target.isCompleted,
+            },
+          }));
+      }
+
+      return { updated, notifPayloads };
     });
+
+    if (this.notifications && notifPayloads.length > 0) {
+      await this.notifications.createMany(notifPayloads);
+    }
+
+    return updated;
   }
 
   async getProjectId(taskId: string) {
@@ -306,20 +376,26 @@ export class TasksService {
       }
     }
 
+    let addedIds: string[] = [];
+    let removedIds: string[] = [];
+    let oldAssigneeMap = new Map<string, string>();
+    let oldDue: string | null = null;
+    let newDue: string | null = null;
+
     return this.prisma.$transaction(async (tx) => {
       let hasLogged = false;
 
       // Xử lý thay đổi người được phân công (Assignees) & ghi log Chuyển giao / Phân công / Gỡ
       if (dto.assigneeIds !== undefined) {
         const oldAssignments = task.assignments || [];
-        const oldAssigneeMap = new Map(
+        oldAssigneeMap = new Map(
           oldAssignments.map((a) => [a.user.id, a.user.fullName]),
         );
         const oldAssigneeIds = Array.from(oldAssigneeMap.keys());
         const newAssigneeIds = Array.from(new Set(dto.assigneeIds));
 
-        const addedIds = newAssigneeIds.filter((id) => !oldAssigneeMap.has(id));
-        const removedIds = oldAssigneeIds.filter(
+        addedIds = newAssigneeIds.filter((id) => !oldAssigneeMap.has(id));
+        removedIds = oldAssigneeIds.filter(
           (id) => !newAssigneeIds.includes(id),
         );
 
@@ -458,8 +534,8 @@ export class TasksService {
 
       // Ghi log khi thay đổi thời hạn deadline
       if (dto.dueDate !== undefined) {
-        const oldDue = task.dueDate ? task.dueDate.toISOString() : null;
-        const newDue = dto.dueDate ? new Date(dto.dueDate).toISOString() : null;
+        oldDue = task.dueDate ? task.dueDate.toISOString() : null;
+        newDue = dto.dueDate ? new Date(dto.dueDate).toISOString() : null;
         if (oldDue !== newDue) {
           await tx.activityLog.create({
             data: {
@@ -533,8 +609,77 @@ export class TasksService {
         });
       }
 
-      return updatedTask;
+      let notifPayloads: Array<{
+        userId: string;
+        actorId: string;
+        projectId: string;
+        taskId: string;
+        type: NotificationType;
+        title: string;
+        content: string;
+        data: Record<string, unknown>;
+      }> = [];
+
+      if (this.notifications) {
+        // 1. Chuyển giao trực tiếp
+        if (removedIds.length === 1 && addedIds.length === 1) {
+          const fromId = removedIds[0];
+          const toId = addedIds[0];
+          const fromName = oldAssigneeMap.get(fromId) ?? "thành viên";
+          notifPayloads.push({
+            userId: toId,
+            actorId,
+            projectId: task.projectId,
+            taskId: task.id,
+            type: NotificationType.TASK_ASSIGNED,
+            title: "Chuyển giao nhiệm vụ",
+            content: `Bạn vừa được chuyển giao nhiệm vụ "${updatedTask.title}" từ ${fromName}.`,
+            data: { projectId: task.projectId, taskId: task.id },
+          });
+        } else if (addedIds.length > 0) {
+          // 2. Thành viên mới được gán
+          for (const aId of addedIds) {
+            notifPayloads.push({
+              userId: aId,
+              actorId,
+              projectId: task.projectId,
+              taskId: task.id,
+              type: NotificationType.TASK_ASSIGNED,
+              title: "Phân công nhiệm vụ",
+              content: `Bạn đã được phân công vào nhiệm vụ "${updatedTask.title}".`,
+              data: { projectId: task.projectId, taskId: task.id },
+            });
+          }
+        }
+
+        // 3. Thay đổi hạn hoàn thành (deadline)
+        if (dto.dueDate !== undefined && oldDue !== newDue) {
+          const currentAssignees = updatedTask.assignments || [];
+          for (const a of currentAssignees) {
+            if (!addedIds.includes(a.userId)) {
+              notifPayloads.push({
+                userId: a.userId,
+                actorId,
+                projectId: task.projectId,
+                taskId: task.id,
+                type: NotificationType.TASK_DUE_DATE_CHANGED,
+                title: "Cập nhật thời hạn nhiệm vụ",
+                content: `Thời hạn hoàn thành của nhiệm vụ "${updatedTask.title}" đã được thay đổi.`,
+                data: { projectId: task.projectId, taskId: task.id },
+              });
+            }
+          }
+        }
+      }
+
+      return { updatedTask, notifPayloads };
     });
+
+    if (this.notifications && notifPayloads.length > 0) {
+      await this.notifications.createMany(notifPayloads);
+    }
+
+    return updatedTask;
   }
 
   async remove(taskId: string, actorId: string) {
@@ -611,7 +756,7 @@ export class TasksService {
       throw new BadRequestException("Thành viên đã được gán vào task này");
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const assignment = await this.prisma.$transaction(async (tx) => {
       const assignment = await tx.taskAssignment.create({
         data: { taskId, userId: targetUserId },
         include: {
@@ -637,6 +782,21 @@ export class TasksService {
 
       return assignment;
     });
+
+    if (this.notifications) {
+      await this.notifications.create({
+        userId: targetUserId,
+        actorId,
+        projectId: task.projectId,
+        taskId: task.id,
+        type: NotificationType.TASK_ASSIGNED,
+        title: "Phân công nhiệm vụ",
+        content: `Bạn đã được phân công vào nhiệm vụ "${task.title}".`,
+        data: { projectId: task.projectId, taskId: task.id },
+      });
+    }
+
+    return assignment;
   }
 
   async unassign(taskId: string, actorId: string, targetUserId: string) {

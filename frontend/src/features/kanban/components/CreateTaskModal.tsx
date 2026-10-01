@@ -38,6 +38,7 @@ export function CreateTaskModal({
     onSuccess: (newTask) => {
       queryClient.invalidateQueries({ queryKey: ['kanban', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
       toast.success('Đã tạo nhiệm vụ thành công');
       setTitle('');
       setAssigneeId('');
