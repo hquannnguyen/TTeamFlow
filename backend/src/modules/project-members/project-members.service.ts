@@ -4,15 +4,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
-import { ProjectRole, ProjectStatus } from "@prisma/client";
+import { NotificationType, ProjectRole, ProjectStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { AddProjectMemberDto } from "./dto/add-project-member.dto";
 import { UpdateProjectMemberRoleDto } from "./dto/update-project-member-role.dto";
 
 @Injectable()
 export class ProjectMembersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
 
   async list(projectId: string) {
     const members = await this.prisma.projectMember.findMany({
@@ -45,7 +50,7 @@ export class ProjectMembersService {
   async add(projectId: string, actorId: string, dto: AddProjectMemberDto) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { id: true, status: true, deletedAt: true },
+      select: { id: true, name: true, status: true, deletedAt: true },
     });
     if (!project || project.deletedAt) {
       throw new NotFoundException("Không tìm thấy dự án");
@@ -70,7 +75,7 @@ export class ProjectMembersService {
     });
     if (exists) throw new ConflictException("Thành viên đã ở trong dự án");
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const member = await tx.projectMember.create({
         data: { projectId, userId: user.id, role: dto.role },
         include: {
@@ -107,6 +112,20 @@ export class ProjectMembersService {
         user: member.user,
       };
     });
+
+    if (this.notifications && user.id !== actorId) {
+      await this.notifications.create({
+        userId: user.id,
+        actorId,
+        projectId,
+        type: NotificationType.PROJECT_INVITED,
+        title: "Lời mời tham gia dự án",
+        content: `Bạn đã được thêm vào dự án "${project.name}" với vai trò ${dto.role}.`,
+        data: { projectId },
+      });
+    }
+
+    return result;
   }
 
   async updateRole(

@@ -13,6 +13,7 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { ChecklistsModule } from "./modules/checklists/checklists.module";
 import { CommentsModule } from "./modules/comments/comments.module";
 import { AdminModule } from "./modules/admin/admin.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { AdminModule } from "./modules/admin/admin.module";
     ChecklistsModule,
     CommentsModule,
     AdminModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

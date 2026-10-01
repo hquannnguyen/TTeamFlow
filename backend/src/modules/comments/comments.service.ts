@@ -3,15 +3,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
-import { ProjectRole, ProjectStatus } from "@prisma/client";
+import { NotificationType, ProjectRole, ProjectStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { CreateCommentDto } from "./dto/create-comment.dto";
 import { UpdateCommentDto } from "./dto/update-comment.dto";
 
 @Injectable()
 export class CommentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
 
   async findAll(taskId: string, actorId: string) {
     const task = await this.prisma.task.findFirst({
@@ -57,7 +62,10 @@ export class CommentsService {
   async create(taskId: string, actorId: string, dto: CreateCommentDto) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
-      include: { project: true },
+      include: {
+        project: true,
+        assignments: { select: { userId: true } },
+      },
     });
     if (!task) {
       throw new NotFoundException("Task không tồn tại");
@@ -98,6 +106,73 @@ export class CommentsService {
         },
       },
     });
+
+    if (this.notifications) {
+      const projectMembers = await this.prisma.projectMember.findMany({
+        where: { projectId: task.projectId },
+        include: { user: { select: { id: true, fullName: true } } },
+      });
+
+      const mentionedUserIds = new Set<string>();
+      const payloads = [];
+
+      // 1. Quét @mentions
+      for (const m of projectMembers) {
+        if (
+          m.userId !== actorId &&
+          dto.content.includes(`@${m.user.fullName}`)
+        ) {
+          mentionedUserIds.add(m.userId);
+          const snippet =
+            dto.content.length > 80
+              ? `${dto.content.slice(0, 80)}...`
+              : dto.content;
+          payloads.push({
+            userId: m.userId,
+            actorId,
+            projectId: task.projectId,
+            taskId: task.id,
+            type: NotificationType.TASK_MENTIONED,
+            title: "Nhắc đến bạn trong bình luận",
+            content: `${created.user.fullName} đã nhắc đến bạn: "${snippet}"`,
+            data: {
+              projectId: task.projectId,
+              taskId: task.id,
+              commentId: created.id,
+            },
+          });
+        }
+      }
+
+      // 2. Thông báo cho người tạo task & các assignees khác
+      const taskInvolvedUserIds = new Set<string>([
+        task.creatorId,
+        ...task.assignments.map((a) => a.userId),
+      ]);
+
+      for (const uId of taskInvolvedUserIds) {
+        if (uId !== actorId && !mentionedUserIds.has(uId)) {
+          payloads.push({
+            userId: uId,
+            actorId,
+            projectId: task.projectId,
+            taskId: task.id,
+            type: NotificationType.TASK_COMMENTED,
+            title: "Bình luận mới trong nhiệm vụ",
+            content: `${created.user.fullName} đã bình luận vào nhiệm vụ "${task.title}".`,
+            data: {
+              projectId: task.projectId,
+              taskId: task.id,
+              commentId: created.id,
+            },
+          });
+        }
+      }
+
+      if (payloads.length > 0) {
+        await this.notifications.createMany(payloads);
+      }
+    }
 
     return {
       ...created,

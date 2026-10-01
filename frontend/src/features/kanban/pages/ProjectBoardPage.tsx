@@ -178,6 +178,7 @@ export function ProjectBoardPage() {
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
       queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     },
     onError: (err: unknown, _vars, context) => {
       if (context?.previousBoard) {
