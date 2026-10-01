@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import logo from '../../assets/logo.png';
 import { getMediaUrl } from '../../api/http';
 import { logout as logoutApi } from '../../features/auth/api/auth.api';
@@ -24,6 +24,7 @@ export function AppLayout() {
   const { activeProjectId, setActiveProjectId } = useActiveProjectStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
@@ -78,6 +79,7 @@ export function AppLayout() {
     } catch {
       // ignore
     } finally {
+      queryClient.clear();
       logout();
       toast.info('Đã đăng xuất khỏi hệ thống');
       navigate('/login', { replace: true });

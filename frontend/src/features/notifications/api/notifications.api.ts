@@ -41,12 +41,19 @@ export async function getNotifications(
 
 export async function getUnreadNotificationCount(): Promise<{ unreadCount: number }> {
   const response = await http.get<{
-    success: boolean;
-    data: { unreadCount: number };
+    success?: boolean;
+    data?: { unreadCount?: number };
+    unreadCount?: number;
   }>('/notifications/unread-count');
 
-  // Unwrap response.data.data from backend ResponseInterceptor
-  return response.data?.data ?? response.data;
+  const raw = response.data?.data ?? response.data;
+  if (typeof raw?.unreadCount === 'number') {
+    return { unreadCount: raw.unreadCount };
+  }
+  if (typeof (raw as unknown) === 'number') {
+    return { unreadCount: raw as unknown as number };
+  }
+  return { unreadCount: 0 };
 }
 
 export async function markNotificationAsRead(id: string): Promise<NotificationItemData> {

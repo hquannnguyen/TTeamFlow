@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { login } from '../api/auth.api';
 import { useAuthStore } from '../store/auth.store';
@@ -49,6 +50,7 @@ export function LoginPage() {
   const location = useLocation();
   const state = location.state as { successMessage?: string; email?: string } | null;
   const { setAuth } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const [showPwd, setShowPwd] = useState(false);
   const [serverError, setServerError] = useState('');
@@ -68,6 +70,7 @@ export function LoginPage() {
     setSuccessBanner('');
     try {
       const result = await login(values);
+      queryClient.clear();
       setAuth(result.accessToken, result.user);
       toast.success('Đăng nhập thành công!');
       navigate('/projects', { replace: true });

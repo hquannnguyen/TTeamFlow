@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createTask, type KanbanColumn, type KanbanTask } from '../api/kanban.api';
 import { toast } from '../../../components/ui/toast.store';
 import { MemberAutocomplete } from './MemberAutocomplete';
+import { broadcastNotificationUpdate } from '../../notifications/utils/broadcast.util';
 
 interface CreateTaskModalProps {
   projectId: string;
@@ -39,6 +40,7 @@ export function CreateTaskModal({
       queryClient.invalidateQueries({ queryKey: ['kanban', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      broadcastNotificationUpdate();
       toast.success('Đã tạo nhiệm vụ thành công');
       setTitle('');
       setAssigneeId('');

@@ -22,6 +22,7 @@ import { useAuthStore } from '../../auth/store/auth.store';
 import { toast } from '../../../components/ui/toast.store';
 import { getMediaUrl } from '../../../api/http';
 import { useActiveProjectStore } from '../../projects/store/active-project.store';
+import { broadcastNotificationUpdate } from '../../notifications/utils/broadcast.util';
 
 export function ProjectBoardPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -179,6 +180,7 @@ export function ProjectBoardPage() {
       queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      broadcastNotificationUpdate();
     },
     onError: (err: unknown, _vars, context) => {
       if (context?.previousBoard) {

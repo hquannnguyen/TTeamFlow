@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '../../auth/store/auth.store';
 import {
   getNotifications,
   getUnreadNotificationCount,
@@ -9,6 +10,7 @@ import {
 } from '../api/notifications.api';
 import type { NotificationItemData } from '../types/notification.types';
 import { NotificationItem } from './NotificationItem';
+import { broadcastNotificationUpdate } from '../utils/broadcast.util';
 
 export const NotificationBell: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,13 +18,18 @@ export const NotificationBell: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
 
-  // 1. Unread count query (polling every 30s)
-  const { data: unreadData } = useQuery({
-    queryKey: ['notifications', 'unread-count'],
+  // 1. Unread count query (polling fast and in background, staleTime: 0)
+  const { data: unreadData, refetch: refetchUnreadCount } = useQuery({
+    queryKey: ['notifications', 'unread-count', user?.id],
     queryFn: () => getUnreadNotificationCount(),
-    refetchInterval: 10000,
-    refetchOnWindowFocus: true,
+    enabled: Boolean(user?.id),
+    staleTime: 0,
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true,
+    refetchOnWindowFocus: 'always',
+    refetchOnMount: 'always',
   });
 
   const unreadCount =
@@ -34,9 +41,11 @@ export const NotificationBell: React.FC = () => {
 
   // 2. Notifications list query
   const { data: notifResponse, isLoading } = useQuery({
-    queryKey: ['notifications', { unreadOnly: activeTab === 'unread' }],
+    queryKey: ['notifications', 'list', user?.id, { unreadOnly: activeTab === 'unread' }],
     queryFn: () => getNotifications({ unreadOnly: activeTab === 'unread', limit: 20 }),
-    enabled: isOpen,
+    enabled: isOpen && Boolean(user?.id),
+    staleTime: 0,
+    refetchOnWindowFocus: 'always',
   });
 
   const notifications: NotificationItemData[] = Array.isArray(notifResponse)
@@ -45,11 +54,24 @@ export const NotificationBell: React.FC = () => {
       ? notifResponse.data
       : [];
 
+  // Listen to cross-tab updates via BroadcastChannel
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const channel = new BroadcastChannel('tteamflow_notifications');
+    channel.onmessage = () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    };
+    return () => {
+      channel.close();
+    };
+  }, [queryClient]);
+
   // 3. Mark as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: (id: string) => markNotificationAsRead(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      broadcastNotificationUpdate();
     },
   });
 
@@ -58,6 +80,7 @@ export const NotificationBell: React.FC = () => {
     mutationFn: () => markAllNotificationsAsRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      broadcastNotificationUpdate();
     },
   });
 
@@ -114,7 +137,15 @@ export const NotificationBell: React.FC = () => {
         type="button"
         className={`top-icon-btn with-badge ${isOpen ? 'active' : ''}`}
         title="Thông báo"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => {
+          setIsOpen((prev) => {
+            const next = !prev;
+            if (next) {
+              void refetchUnreadCount();
+            }
+            return next;
+          });
+        }}
         aria-expanded={isOpen}
         aria-haspopup="true"
       >

@@ -20,6 +20,7 @@ import { getProject } from '../../projects/api/projects.api';
 import { getMediaUrl } from '../../../api/http';
 import { toast } from '../../../components/ui/toast.store';
 import { MemberAutocomplete } from '../components/MemberAutocomplete';
+import { broadcastNotificationUpdate } from '../../notifications/utils/broadcast.util';
 
 function getInitials(name?: string) {
   if (!name) return '?';
@@ -215,6 +216,7 @@ export function TaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['kanban', effectiveProjectId] });
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      broadcastNotificationUpdate();
       toast.success('Đã cập nhật nhiệm vụ');
     },
     onError: (err: unknown) => {
@@ -243,6 +245,7 @@ export function TaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      broadcastNotificationUpdate();
       toast.success('Đã chuyển trạng thái');
     },
   });
@@ -255,6 +258,8 @@ export function TaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['comments', taskId] });
       queryClient.invalidateQueries({ queryKey: ['taskDetail', taskId] });
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      broadcastNotificationUpdate();
       toast.success('Đã gửi tin nhắn');
     },
   });
