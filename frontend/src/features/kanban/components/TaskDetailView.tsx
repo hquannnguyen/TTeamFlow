@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getTaskDetail,
@@ -13,6 +13,7 @@ import {
   deleteChecklistItem,
   getActivityLogs,
   type KanbanColumn,
+  type KanbanTask,
 } from '../api/kanban.api';
 import { getMediaUrl } from '../../../api/http';
 import { toast } from '../../../components/ui/toast.store';
@@ -53,6 +54,38 @@ function formatDisplayDate(dateStr?: string | null) {
   return `${hours}:${minutes} ${day} thg ${month}, ${year}`;
 }
 
+function formatCommentTimestamp(dateStr?: string | Date | null) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+  const timeFormatter = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const timePart = timeFormatter.format(d);
+
+  // Nếu quá 1 ngày (>= 24 giờ) hoặc ngày gửi khác ngày hôm nay (từ hôm qua trở về trước)
+  if (diffMs >= ONE_DAY_MS || now.toDateString() !== d.toDateString()) {
+    const isDifferentYear = now.getFullYear() !== d.getFullYear();
+    const dateFormatter = new Intl.DateTimeFormat('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      day: '2-digit',
+      month: '2-digit',
+      ...(isDifferentYear ? { year: 'numeric' } : {}),
+    });
+    return `${timePart} ${dateFormatter.format(d)}`;
+  }
+
+  return timePart;
+}
+
 export function TaskDetailView({
   taskId,
   projectId,
@@ -80,12 +113,18 @@ export function TaskDetailView({
     enabled: Boolean(taskId) && isOpen,
   });
 
-  // 2. Fetch Comments
-  const { data: comments = [] } = useQuery({
+  // 2. Fetch Comments (sorted newest first)
+  const { data: rawComments = [] } = useQuery({
     queryKey: ['comments', taskId],
     queryFn: () => getComments(taskId),
     enabled: Boolean(taskId) && isOpen,
   });
+
+  const comments = useMemo(() => {
+    return [...rawComments].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [rawComments]);
 
   // 3. Fetch Checklists
   const { data: checklists = [] } = useQuery({
@@ -94,11 +133,11 @@ export function TaskDetailView({
     enabled: Boolean(taskId) && isOpen,
   });
 
-  // 4. Fetch Activity Logs
+  // 4. Fetch Activity Logs specifically for this task
   const { data: activityLogs = [] } = useQuery({
-    queryKey: ['activityLogs', projectId],
-    queryFn: () => getActivityLogs(projectId),
-    enabled: Boolean(projectId) && isOpen,
+    queryKey: ['activityLogs', projectId, taskId],
+    queryFn: () => getActivityLogs(projectId, { entityId: taskId, limit: 100 }),
+    enabled: Boolean(projectId && taskId) && isOpen,
   });
 
   // Sync initial description & title input when task data loads
@@ -121,7 +160,7 @@ export function TaskDetailView({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['taskDetail', taskId] });
       queryClient.invalidateQueries({ queryKey: ['kanban', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['activityLogs', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
       toast.success('Đã cập nhật thông tin nhiệm vụ');
     },
     onError: (err: unknown) => {
@@ -136,10 +175,19 @@ export function TaskDetailView({
       const maxPos = targetCol?.tasks.reduce((max, t) => Math.max(max, t.position), 0) ?? 0;
       return moveTask(taskId, targetColumnId, maxPos + 1000);
     },
-    onSuccess: () => {
+    onSuccess: (_data, targetColumnId) => {
+      queryClient.setQueryData<KanbanTask>(['taskDetail', taskId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          columnId: targetColumnId,
+        };
+      });
       queryClient.invalidateQueries({ queryKey: ['taskDetail', taskId] });
-      queryClient.invalidateQueries({ queryKey: ['kanban', projectId] });
-      queryClient.invalidateQueries({ queryKey: ['activityLogs', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success('Đã chuyển trạng thái cột thành công');
     },
   });
@@ -470,45 +518,77 @@ export function TaskDetailView({
                     <form
                       onSubmit={(e) => {
                         e.preventDefault();
-                        if (!newComment.trim()) return;
+                        if (!newComment.trim() || createCommentMutation.isPending) return;
                         createCommentMutation.mutate(newComment.trim());
                       }}
                       className="comment-post-form"
                     >
-                      <textarea
-                        className="comment-textarea"
-                        rows={3}
-                        placeholder="Viết bình luận hoặc thông báo..."
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                      />
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                      <div className="comment-input-wrap">
+                        <textarea
+                          className="comment-textarea"
+                          rows={3}
+                          placeholder="Viết bình luận hoặc thông báo (Nhấn Enter để gửi)..."
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                              e.preventDefault();
+                              if (!newComment.trim() || createCommentMutation.isPending) return;
+                              createCommentMutation.mutate(newComment.trim());
+                            }
+                          }}
+                        />
                         <button
                           type="submit"
-                          className="btn-primary"
+                          className="comment-submit-btn"
                           disabled={createCommentMutation.isPending || !newComment.trim()}
+                          title="Gửi tin (Enter)"
+                          aria-label="Gửi tin"
                         >
-                          {createCommentMutation.isPending ? 'Đang gửi...' : 'Gửi tin'}
+                          {createCommentMutation.isPending ? (
+                            <span className="btn-spinner" />
+                          ) : (
+                            <svg
+                              width="15"
+                              height="15"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <line x1="22" y1="2" x2="11" y2="13" />
+                              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                            </svg>
+                          )}
                         </button>
                       </div>
                     </form>
 
                     <div className="comments-stream">
                       {comments.map((c) => {
-                        const authorAvatar = getMediaUrl(c.author?.avatarUrl);
+                        const author = c.user || c.author;
+                        const authorAvatar = getMediaUrl(author?.avatarUrl);
+                        const authorName = author?.fullName || 'Thành viên';
+                        const timeFormatted = formatCommentTimestamp(c.createdAt);
+
                         return (
                           <div key={c.id} className="comment-item">
                             {authorAvatar ? (
-                              <img src={authorAvatar} alt={c.author?.fullName} className="comment-avatar" />
+                              <img src={authorAvatar} alt={authorName} className="comment-avatar" />
                             ) : (
-                              <div className="comment-avatar">{getInitials(c.author?.fullName)}</div>
+                              <div className="comment-avatar">{getInitials(authorName)}</div>
                             )}
 
                             <div className="comment-body">
                               <div className="comment-meta">
-                                <span className="comment-author">{c.author?.fullName || 'Thành viên'}</span>
-                                <span className="comment-time">
-                                  {new Date(c.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                <span className="comment-author">{authorName}</span>
+                                <span
+                                  className="comment-time"
+                                  title={formatDisplayDate(c.createdAt)}
+                                >
+                                  {timeFormatted}
                                 </span>
                               </div>
                               <p className="comment-text">{c.content}</p>
@@ -532,26 +612,63 @@ export function TaskDetailView({
                     {taskLogs.length === 0 ? (
                       <p style={{ color: '#94a3b8', fontSize: '13px' }}>Chưa có nhật ký hoạt động cho nhiệm vụ này.</p>
                     ) : (
-                      taskLogs.map((log) => (
-                        <div key={log.id} className="activity-item">
-                          <div className="activity-avatar">{getInitials(log.actor?.fullName)}</div>
-                          <div className="activity-info">
-                            <span className="activity-actor">{log.actor?.fullName || 'Hệ thống'}</span>
-                            <span className="activity-action">
-                              {log.action === 'TASK_CREATED'
-                                ? 'Nhiệm vụ đã được tạo'
-                                : log.action === 'TASK_MOVED'
-                                ? 'Đã chuyển nhiệm vụ'
-                                : log.action === 'TASK_COMPLETED'
-                                ? 'Đã hoàn thành nhiệm vụ'
-                                : log.action}
-                            </span>
-                            <span className="activity-time">
-                              {new Date(log.createdAt).toLocaleString()}
-                            </span>
+                      taskLogs.map((log) => {
+                        const meta = log.metadata;
+                        let actionText = 'đã cập nhật thông tin nhiệm vụ';
+                        if (log.action === 'TASK_CREATED') {
+                          actionText = 'đã tạo nhiệm vụ này';
+                        } else if (log.action === 'TASK_COMPLETED') {
+                          const toCol = (typeof meta?.toColumnName === 'string' ? meta.toColumnName : undefined) || columns.find((c) => c.id === meta?.toColumnId)?.name;
+                          actionText = toCol ? `đã hoàn thành nhiệm vụ (chuyển sang "${toCol}")` : 'đã hoàn thành nhiệm vụ';
+                        } else if (log.action === 'TASK_MOVED') {
+                          const fromCol = (typeof meta?.fromColumnName === 'string' ? meta.fromColumnName : undefined) || columns.find((c) => c.id === meta?.fromColumnId)?.name;
+                          const toCol = (typeof meta?.toColumnName === 'string' ? meta.toColumnName : undefined) || columns.find((c) => c.id === meta?.toColumnId)?.name;
+                          actionText = fromCol && toCol ? `đã chuyển trạng thái từ "${fromCol}" sang "${toCol}"` : toCol ? `đã chuyển trạng thái sang "${toCol}"` : 'đã chuyển trạng thái nhiệm vụ';
+                        } else if (log.action === 'TASK_ASSIGNED') {
+                          if (meta?.isTransfer) {
+                            const fromName = (typeof meta?.transferredFromUserName === 'string' ? meta.transferredFromUserName : undefined) || members.find((m) => m.user.id === meta?.transferredFromUserId)?.user.fullName || 'thành viên';
+                            const toName = (typeof meta?.assignedUserName === 'string' ? meta.assignedUserName : undefined) || members.find((m) => m.user.id === meta?.assignedUserId)?.user.fullName || 'thành viên';
+                            actionText = `đã chuyển giao nhiệm vụ từ ${fromName} cho ${toName}`;
+                          } else {
+                            const name = (typeof meta?.assignedUserName === 'string' ? meta.assignedUserName : undefined) || members.find((m) => m.user.id === meta?.assignedUserId)?.user.fullName;
+                            actionText = name ? `đã phân công nhiệm vụ cho ${name}` : 'đã phân công nhiệm vụ';
+                          }
+                        } else if (log.action === 'TASK_UNASSIGNED') {
+                          const name = (typeof meta?.unassignedUserName === 'string' ? meta.unassignedUserName : undefined) || members.find((m) => m.user.id === meta?.unassignedUserId)?.user.fullName;
+                          actionText = name ? `đã gỡ phân công của ${name}` : 'đã gỡ phân công nhiệm vụ';
+                        } else if (log.action === 'TASK_UPDATED') {
+                          const pMap: Record<string, string> = { LOW: 'Thấp', MEDIUM: 'Trung bình', HIGH: 'Cao', URGENT: 'Khẩn cấp' };
+                          if (meta?.changeType === 'PRIORITY' || meta?.newPriority) {
+                            const oldP = typeof meta?.oldPriority === 'string' ? pMap[meta.oldPriority] || meta.oldPriority : undefined;
+                            const newP = typeof meta?.newPriority === 'string' ? pMap[meta.newPriority] || meta.newPriority : undefined;
+                            actionText = oldP && newP ? `đã thay đổi mức độ ưu tiên từ ${oldP} sang ${newP}` : `đã thay đổi mức độ ưu tiên sang ${newP}`;
+                          } else if (meta?.changeType === 'DUE_DATE' || meta?.newDueDate !== undefined) {
+                            const oldDue = meta.oldDueDate ? formatDisplayDate(meta.oldDueDate as string) : null;
+                            const newDue = meta.newDueDate ? formatDisplayDate(meta.newDueDate as string) : null;
+                            actionText = !newDue || newDue === 'Chưa đặt thời hạn' ? 'đã xóa hạn hoàn thành (deadline)' : oldDue && oldDue !== 'Chưa đặt thời hạn' ? `đã thay đổi hạn hoàn thành (deadline) từ ${oldDue} sang ${newDue}` : `đã đặt hạn hoàn thành (deadline) là ${newDue}`;
+                          }
+                        }
+
+                        return (
+                          <div key={log.id} className="activity-item">
+                            <div className="activity-avatar">{getInitials(log.actor?.fullName)}</div>
+                            <div className="activity-info">
+                              <span className="activity-actor">{log.actor?.fullName || 'Hệ thống'}</span>
+                              <span className="activity-action">{actionText}</span>
+                              <span className="activity-time">
+                                {new Intl.DateTimeFormat('vi-VN', {
+                                  timeZone: 'Asia/Ho_Chi_Minh',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                }).format(new Date(log.createdAt))}
+                              </span>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 )}

@@ -127,10 +127,16 @@ export async function reorderColumns(
 export interface CommentItem {
   id: string;
   taskId: string;
-  authorId: string;
+  authorId?: string;
+  userId?: string;
   content: string;
   createdAt: string;
   author?: {
+    id: string;
+    fullName: string;
+    avatarUrl?: string | null;
+  };
+  user?: {
     id: string;
     fullName: string;
     avatarUrl?: string | null;
@@ -247,9 +253,21 @@ export async function deleteChecklistItem(id: string) {
   return response.data.data;
 }
 
-export async function getActivityLogs(projectId: string) {
+export interface GetActivityLogsParams {
+  entityId?: string;
+  action?: string;
+  entityType?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function getActivityLogs(
+  projectId: string,
+  params?: GetActivityLogsParams,
+) {
   const response = await http.get<{ success: true; data: ActivityLogItem[] }>(
     `/projects/${projectId}/activity-logs`,
+    { params },
   );
   return response.data.data;
 }

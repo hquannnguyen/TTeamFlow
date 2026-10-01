@@ -33,9 +33,9 @@ export class CommentsService {
       throw new ForbiddenException("Bạn không có quyền trong dự án này");
     }
 
-    return this.prisma.comment.findMany({
+    const comments = await this.prisma.comment.findMany({
       where: { taskId },
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: "desc" },
       include: {
         user: {
           select: {
@@ -47,6 +47,11 @@ export class CommentsService {
         },
       },
     });
+
+    return comments.map((c) => ({
+      ...c,
+      author: c.user,
+    }));
   }
 
   async create(taskId: string, actorId: string, dto: CreateCommentDto) {
@@ -76,7 +81,7 @@ export class CommentsService {
       );
     }
 
-    return this.prisma.comment.create({
+    const created = await this.prisma.comment.create({
       data: {
         taskId,
         userId: actorId,
@@ -93,6 +98,11 @@ export class CommentsService {
         },
       },
     });
+
+    return {
+      ...created,
+      author: created.user,
+    };
   }
 
   async update(commentId: string, actorId: string, dto: UpdateCommentDto) {
@@ -121,7 +131,7 @@ export class CommentsService {
       );
     }
 
-    return this.prisma.comment.update({
+    const updated = await this.prisma.comment.update({
       where: { id: commentId },
       data: {
         content: dto.content,
@@ -137,6 +147,11 @@ export class CommentsService {
         },
       },
     });
+
+    return {
+      ...updated,
+      author: updated.user,
+    };
   }
 
   async remove(commentId: string, actorId: string) {
