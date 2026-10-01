@@ -515,7 +515,7 @@ export function TaskDetailPage() {
           <button
             type="button"
             className="btn-back-kanban"
-            onClick={() => navigate(projectId ? `/projects/${projectId}/board` : '/board')}
+            onClick={() => navigate(effectiveProjectId ? `/projects/${effectiveProjectId}/board` : '/board')}
           >
             ← Bảng Kanban
           </button>

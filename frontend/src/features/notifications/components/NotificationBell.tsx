@@ -90,11 +90,18 @@ export const NotificationBell: React.FC = () => {
     }
     setIsOpen(false);
 
-    // Deep navigation
-    if (item.taskId && item.projectId) {
-      navigate(`/projects/${item.projectId}/board?taskId=${item.taskId}`);
-    } else if (item.projectId) {
-      navigate(`/projects/${item.projectId}/board`);
+    // Deep navigation: mở trang chi tiết task nếu có taskId
+    const targetTaskId = item.taskId || item.data?.taskId;
+    const targetProjectId = item.projectId || item.data?.projectId;
+
+    if (targetTaskId) {
+      if (targetProjectId) {
+        navigate(`/projects/${targetProjectId}/tasks/${targetTaskId}`);
+      } else {
+        navigate(`/tasks/${targetTaskId}`);
+      }
+    } else if (targetProjectId) {
+      navigate(`/projects/${targetProjectId}/board`);
     } else {
       navigate('/dashboard');
     }
