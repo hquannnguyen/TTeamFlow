@@ -501,7 +501,9 @@ async function runTests() {
   // =========================================================================
   // TC-13: Chặn thêm thành viên vào dự án đã lưu trữ (ARCHIVED) hoặc không tồn tại
   // =========================================================================
-  console.log("--- TC-13: Chặn thêm thành viên vào dự án đã lưu trữ (ARCHIVED) ---");
+  console.log(
+    "--- TC-13: Chặn thêm thành viên vào dự án đã lưu trữ (ARCHIVED) ---",
+  );
   await assert.rejects(
     async () => {
       await service.add(archivedProjectId, ownerId, {
@@ -523,7 +525,9 @@ async function runTests() {
     (err: unknown) => err instanceof NotFoundException,
     "Phải ném NotFoundException khi thêm thành viên vào dự án không tồn tại",
   );
-  console.log("✅ TC-13 Pass: Chặn thêm thành viên vào dự án ARCHIVED hoặc không tồn tại");
+  console.log(
+    "✅ TC-13 Pass: Chặn thêm thành viên vào dự án ARCHIVED hoặc không tồn tại",
+  );
 
   console.log("\n🎉 TẤT CẢ 13 TEST CASES CỦA TASK 14 ĐÃ PASS 100%!");
 }

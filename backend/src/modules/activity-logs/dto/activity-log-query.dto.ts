@@ -28,4 +28,7 @@ export class ActivityLogQueryDto {
     message: "entityType không hợp lệ",
   })
   entityType?: ActivityEntityType;
+
+  @IsOptional()
+  entityId?: string;
 }

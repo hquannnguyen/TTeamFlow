@@ -130,7 +130,10 @@ async function runAdminTests() {
           } as MockAdminUser);
         return Promise.resolve(null);
       },
-      update: (args: { where: { id: string }; data: { isActive: boolean } }) => {
+      update: (args: {
+        where: { id: string };
+        data: { isActive: boolean };
+      }) => {
         const updatedUser: MockAdminUser = {
           ...mockUsers[0],
           id: args.where.id,
@@ -235,7 +238,9 @@ async function runAdminTests() {
       err.message === "Người dùng không tồn tại",
     "TC-8 Failed: User không tồn tại phải ném 404",
   );
-  console.log("✅ TC-8: Thao tác trên user không tồn tại -> Trả về 404 NotFound");
+  console.log(
+    "✅ TC-8: Thao tác trên user không tồn tại -> Trả về 404 NotFound",
+  );
 
   console.log("\n🎉 TOÀN BỘ 8/8 TEST CASES ADMIN API ĐÃ PASS THÀNH CÔNG 100%!");
 }
@@ -244,4 +249,3 @@ runAdminTests().catch((err: unknown) => {
   console.error("❌ Test failed:", err);
   process.exit(1);
 });
-

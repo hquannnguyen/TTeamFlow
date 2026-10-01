@@ -92,7 +92,10 @@ export function ProjectBoardPage() {
 
   // Current user & RBAC permission to invite members
   const currentUser = useAuthStore((s) => s.user);
+  const isArchived = project?.status === 'ARCHIVED';
+
   const canInviteMembers = useMemo(() => {
+    if (isArchived) return false;
     if (!currentUser) return false;
     if (currentUser.systemRole === 'ADMIN') return true;
     if (!project?.members) return false;
@@ -100,7 +103,7 @@ export function ProjectBoardPage() {
       (m) => m.user?.id === currentUser.id,
     );
     return myMembership?.role === 'OWNER' || myMembership?.role === 'MANAGER';
-  }, [currentUser, project]);
+  }, [currentUser, project, isArchived]);
 
   // Drag & drop drop target state
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
@@ -124,34 +127,57 @@ export function ProjectBoardPage() {
       newPosition: number;
     }) => moveTask(taskId, targetColumnId, newPosition),
     onMutate: async ({ taskId, targetColumnId }) => {
-      await queryClient.cancelQueries({ queryKey: ['kanban', currentProjectId] });
+      await queryClient.cancelQueries({ queryKey: ['kanban'] });
       const previousBoard = queryClient.getQueryData<KanbanColumn[]>(['kanban', currentProjectId]);
 
       if (previousBoard) {
         let movedTask: KanbanTask | null = null;
-        const nextBoard = previousBoard.map((col) => {
-          const found = col.tasks.find((t) => t.id === taskId);
-          if (found) {
-            movedTask = { ...found, columnId: targetColumnId };
-            return {
-              ...col,
-              tasks: col.tasks.filter((t) => t.id !== taskId),
-            };
-          }
-          return col;
-        });
-
-        if (movedTask) {
-          const targetCol = nextBoard.find((c) => c.id === targetColumnId);
-          if (targetCol) {
-            targetCol.tasks.push(movedTask);
+        for (const col of previousBoard) {
+          const t = col.tasks.find((task) => task.id === taskId);
+          if (t) {
+            movedTask = { ...t, columnId: targetColumnId };
+            break;
           }
         }
 
-        queryClient.setQueryData(['kanban', currentProjectId], nextBoard);
+        if (movedTask) {
+          const nextBoard = previousBoard.map((col) => {
+            const filteredTasks = col.tasks.filter((t) => t.id !== taskId);
+            if (col.id === targetColumnId) {
+              return {
+                ...col,
+                tasks: [...filteredTasks, movedTask!],
+              };
+            }
+            return {
+              ...col,
+              tasks: filteredTasks,
+            };
+          });
+
+          queryClient.setQueryData(['kanban', currentProjectId], nextBoard);
+        }
       }
 
       return { previousBoard };
+    },
+    onSuccess: (_data, variables) => {
+      // Optimistically update taskDetail cache if loaded
+      queryClient.setQueryData<KanbanTask>(['taskDetail', variables.taskId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          columnId: variables.targetColumnId,
+        };
+      });
+
+      // Invalidate all related queries so board, list view, task details, and activity feeds refresh immediately
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['taskDetail'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (err: unknown, _vars, context) => {
       if (context?.previousBoard) {
@@ -165,8 +191,11 @@ export function ProjectBoardPage() {
       toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard', currentProjectId] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['taskDetail'] });
     },
   });
 
@@ -575,6 +604,20 @@ export function ProjectBoardPage() {
         </div>
       </div>
 
+      {/* Archived Project Read-Only Banner */}
+      {isArchived && (
+        <div className="members-archived-banner" style={{ margin: '0 24px 12px' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect width="20" height="5" x="2" y="3" rx="1" />
+            <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+            <path d="M10 12h4" />
+          </svg>
+          <span>
+            <strong>Dự án đã được lưu trữ (ARCHIVED):</strong> Bảng công việc đang ở chế độ chỉ đọc. Không thể thêm, sửa, xóa, mời thành viên hoặc di chuyển công việc cho đến khi dự án được khôi phục trạng thái hoạt động.
+          </span>
+        </div>
+      )}
+
       {/* ── Main Content: Kanban Board vs List View ── */}
       {viewMode === 'board' ? (
         <div className="kanban-columns-scroll-area">
@@ -586,13 +629,14 @@ export function ProjectBoardPage() {
             ? 'doing'
             : 'todo';
 
-          const isDragOver = dragOverColumnId === column.id;
+          const isDragOver = !isArchived && dragOverColumnId === column.id;
 
           return (
             <div
               className={`kanban-column-card ${isDragOver ? 'drag-over' : ''}`}
               key={column.id}
               onDragOver={(e) => {
+                if (isArchived) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
                 if (dragOverColumnId !== column.id) {
@@ -600,14 +644,27 @@ export function ProjectBoardPage() {
                 }
               }}
               onDragLeave={(e) => {
+                if (isArchived) return;
                 if (e.currentTarget.contains(e.relatedTarget as Node)) return;
                 setDragOverColumnId(null);
               }}
               onDrop={(e) => {
+                if (isArchived) return;
                 e.preventDefault();
                 setDragOverColumnId(null);
-                const rawData = e.dataTransfer.getData('text/plain');
-                if (rawData.startsWith('column:')) {
+                let rawData = e.dataTransfer.getData('text/plain');
+                if (!rawData) {
+                  try {
+                    const json = e.dataTransfer.getData('application/json');
+                    if (json) {
+                      const parsed = JSON.parse(json);
+                      if (parsed.taskId) rawData = parsed.taskId;
+                    }
+                  } catch {
+                    // Ignore parse error
+                  }
+                }
+                if (rawData?.startsWith('column:')) {
                   const draggedColId = rawData.replace('column:', '');
                   if (draggedColId && draggedColId !== column.id) {
                     const fromIndex = columns.findIndex((c) => c.id === draggedColId);
@@ -624,7 +681,7 @@ export function ProjectBoardPage() {
                     }
                   }
                 } else if (rawData) {
-                  const taskId = rawData.replace('task:', '');
+                  const taskId = rawData.replace(/^task:/, '');
                   if (taskId) {
                     handleMoveTask(taskId, column.id);
                   }
@@ -634,29 +691,35 @@ export function ProjectBoardPage() {
               {/* Column Header (Draggable for reordering columns) */}
               <div
                 className={`kanban-col-header-bar ${colType}`}
-                draggable
+                draggable={!isArchived}
                 onDragStart={(e) => {
+                  if (isArchived) {
+                    e.preventDefault();
+                    return;
+                  }
                   e.dataTransfer.setData('text/plain', `column:${column.id}`);
                   e.dataTransfer.effectAllowed = 'move';
                 }}
-                style={{ cursor: 'grab' }}
-                title="Kéo thả để thay đổi thứ tự cột"
+                style={{ cursor: isArchived ? 'default' : 'grab' }}
+                title={isArchived ? column.name : 'Kéo thả để thay đổi thứ tự cột'}
               >
                 <div className="kanban-col-title-group">
-                  <div className="kanban-col-drag-handle" title="Kéo thả để thay đổi thứ tự cột">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="9" cy="5" r="1" fill="currentColor"/>
-                      <circle cx="9" cy="12" r="1" fill="currentColor"/>
-                      <circle cx="9" cy="19" r="1" fill="currentColor"/>
-                      <circle cx="15" cy="5" r="1" fill="currentColor"/>
-                      <circle cx="15" cy="12" r="1" fill="currentColor"/>
-                      <circle cx="15" cy="19" r="1" fill="currentColor"/>
-                    </svg>
-                  </div>
+                  {!isArchived && (
+                    <div className="kanban-col-drag-handle" title="Kéo thả để thay đổi thứ tự cột">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="9" cy="5" r="1" fill="currentColor"/>
+                        <circle cx="9" cy="12" r="1" fill="currentColor"/>
+                        <circle cx="9" cy="19" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="5" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="12" r="1" fill="currentColor"/>
+                        <circle cx="15" cy="19" r="1" fill="currentColor"/>
+                      </svg>
+                    </div>
+                  )}
                   <span className={`kanban-col-dot ${colType}`} />
 
                   {/* Inline Rename Column (6.3.2) */}
-                  {editingColumnId === column.id ? (
+                  {!isArchived && editingColumnId === column.id ? (
                     <input
                       type="text"
                       className="kanban-col-name-input"
@@ -672,8 +735,9 @@ export function ProjectBoardPage() {
                   ) : (
                     <span
                       className="kanban-col-name"
-                      title="Double click để đổi tên cột"
+                      title={isArchived ? column.name : 'Double click để đổi tên cột'}
                       onDoubleClick={() => {
+                        if (isArchived) return;
                         setEditingColumnId(column.id);
                         setEditingColumnName(column.name);
                       }}
@@ -685,43 +749,55 @@ export function ProjectBoardPage() {
                   <span className="kanban-col-count-pill">{column.tasks.length}</span>
                 </div>
 
-                <div className="kanban-col-header-actions">
-                  {/* Add Task to Column */}
-                  <button
-                    type="button"
-                    className="kanban-col-icon-btn"
-                    title="Thêm nhiệm vụ vào cột này"
-                    onClick={() => {
-                      setCreateDefaultColumnId(column.id);
-                      setIsCreateModalOpen(true);
-                    }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" x2="12" y1="5" y2="19" />
-                      <line x1="5" x2="19" y1="12" y2="12" />
-                    </svg>
-                  </button>
+                {!isArchived && (
+                  <div className="kanban-col-header-actions">
+                    {/* Add Task to Column */}
+                    <button
+                      type="button"
+                      className="kanban-col-icon-btn"
+                      title="Thêm nhiệm vụ vào cột này"
+                      onClick={() => {
+                        setCreateDefaultColumnId(column.id);
+                        setIsCreateModalOpen(true);
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="12" x2="12" y1="5" y2="19" />
+                        <line x1="5" x2="19" y1="12" y2="12" />
+                      </svg>
+                    </button>
 
-                  {/* Delete Column (6.3.2) */}
-                  <button
-                    type="button"
-                    className="kanban-col-icon-btn delete"
-                    title="Xóa cột này"
-                    onClick={() => {
-                      setDeletingColumn(column);
-                    }}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 6h18" />
-                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                    </svg>
-                  </button>
-                </div>
+                    {/* Delete Column (6.3.2) */}
+                    <button
+                      type="button"
+                      className="kanban-col-icon-btn delete"
+                      title="Xóa cột này"
+                      onClick={() => {
+                        setDeletingColumn(column);
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Tasks List Box */}
-              <div className="kanban-tasks-list-box">
+              <div
+                className="kanban-tasks-list-box"
+                onDragOver={(e) => {
+                  if (isArchived) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverColumnId !== column.id) {
+                    setDragOverColumnId(column.id);
+                  }
+                }}
+              >
                 {column.tasks.length === 0 ? (
                   <div
                     style={{
@@ -740,6 +816,7 @@ export function ProjectBoardPage() {
                       task={task}
                       projectKey={project?.projectKey || 'TTF'}
                       isCompletedColumn={column.isCompleted}
+                      isArchived={isArchived}
                       onDeleteTask={(taskId) => deleteTaskMutation.mutate(taskId)}
                       onClick={() => {
                         navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
@@ -753,49 +830,51 @@ export function ProjectBoardPage() {
         })}
 
         {/* ── Add New Column Card (6.3.2 Thêm cột) ── */}
-        {isAddingColumn ? (
-          <div className="kanban-column-card" style={{ padding: '16px', gap: '12px' }}>
-            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>Thêm cột mới</h4>
-            <input
-              type="text"
-              className="kanban-col-name-input"
-              style={{ width: '100%' }}
-              placeholder="Nhập tên cột trạng thái..."
-              autoFocus
-              value={newColumnName}
-              onChange={(e) => setNewColumnName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreateColumn();
-                if (e.key === 'Escape') setIsAddingColumn(false);
-              }}
-            />
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="btn-secondary"
-                style={{ padding: '6px 12px', fontSize: '12.5px' }}
-                onClick={() => setIsAddingColumn(false)}
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                style={{ padding: '6px 12px', fontSize: '12.5px' }}
-                onClick={handleCreateColumn}
-              >
-                Thêm cột
-              </button>
+        {!isArchived && (
+          isAddingColumn ? (
+            <div className="kanban-column-card" style={{ padding: '16px', gap: '12px' }}>
+              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>Thêm cột mới</h4>
+              <input
+                type="text"
+                className="kanban-col-name-input"
+                style={{ width: '100%' }}
+                placeholder="Nhập tên cột trạng thái..."
+                autoFocus
+                value={newColumnName}
+                onChange={(e) => setNewColumnName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleCreateColumn();
+                  if (e.key === 'Escape') setIsAddingColumn(false);
+                }}
+              />
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                  onClick={() => setIsAddingColumn(false)}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  style={{ padding: '6px 12px', fontSize: '12.5px' }}
+                  onClick={handleCreateColumn}
+                >
+                  Thêm cột
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="kanban-add-column-card" onClick={() => setIsAddingColumn(true)}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="19" x2="19" y2="12" />
-            </svg>
-            <span style={{ fontSize: '13.5px', fontWeight: 600, color: '#4f46e5' }}>+ Thêm cột mới</span>
-          </div>
+          ) : (
+            <div className="kanban-add-column-card" onClick={() => setIsAddingColumn(true)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="19" x2="19" y2="12" />
+              </svg>
+              <span style={{ fontSize: '13.5px', fontWeight: 600, color: '#4f46e5' }}>+ Thêm cột mới</span>
+            </div>
+          )
         )}
       </div>
     ) : (
@@ -803,15 +882,12 @@ export function ProjectBoardPage() {
         columns={filteredColumns}
         allColumns={columns}
         projectKey={project?.projectKey || 'TTF'}
+        isArchived={isArchived}
         onTaskClick={(task) => {
           navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
         }}
         onMoveTask={(taskId, targetColumnId) => {
-          moveTaskMutation.mutate({
-            taskId,
-            targetColumnId,
-            newPosition: 1000,
-          });
+          handleMoveTask(taskId, targetColumnId);
         }}
         onDeleteTask={(taskId) => {
           deleteTaskMutation.mutate(taskId);

@@ -1,15 +1,33 @@
 export interface TaskMovedMetadata {
   fromColumnId: string;
+  fromColumnName?: string;
   toColumnId: string;
+  toColumnName?: string;
   newPosition?: number;
 }
 
 export interface TaskAssignedMetadata {
   assignedUserId: string;
+  assignedUserName?: string;
+  isTransfer?: boolean;
+  transferredFromUserId?: string;
+  transferredFromUserName?: string;
 }
 
 export interface TaskUnassignedMetadata {
   unassignedUserId: string;
+  unassignedUserName?: string;
+}
+
+export interface TaskUpdatedMetadata {
+  changeType?: "PRIORITY" | "DUE_DATE" | "TITLE" | "DESCRIPTION" | "GENERAL";
+  field?: string;
+  oldPriority?: string;
+  newPriority?: string;
+  oldDueDate?: string | null;
+  newDueDate?: string | null;
+  oldTitle?: string;
+  newTitle?: string;
 }
 
 export interface MemberAddedMetadata {
@@ -52,4 +70,3 @@ export type ActivityMetadata =
   | ProjectUpdatedMetadata
   | ColumnReorderedMetadata
   | Record<string, unknown>;
-

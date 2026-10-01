@@ -8,4 +8,3 @@ import { AdminUsersService } from "./admin-users.service";
   exports: [AdminUsersService],
 })
 export class AdminModule {}
-

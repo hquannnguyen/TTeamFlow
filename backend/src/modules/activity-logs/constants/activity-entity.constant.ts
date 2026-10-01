@@ -7,4 +7,3 @@ export const ActivityEntityType = {
 
 export type ActivityEntityType =
   (typeof ActivityEntityType)[keyof typeof ActivityEntityType];
-

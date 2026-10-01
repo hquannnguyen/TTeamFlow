@@ -87,6 +87,7 @@ export function AppLayout() {
   const isProjectsActive = location.pathname === '/projects';
   const isBoardActive = location.pathname.includes('/board') || location.pathname.includes('/kanban');
   const isMembersActive = location.pathname.includes('/members');
+  const isActivityActive = location.pathname.includes('/activity');
   const isAdminActive = location.pathname.startsWith('/admin');
 
   return (
@@ -152,13 +153,16 @@ export function AppLayout() {
             <span>Thành viên</span>
           </Link>
 
-          <div className="sidebar-nav-item">
+          <Link
+            to={activeProjectId ? `/projects/${activeProjectId}/activity` : '/activity'}
+            className={`sidebar-nav-item ${isActivityActive ? 'active' : ''}`}
+          >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
             <span>Nhật ký hoạt động</span>
-          </div>
+          </Link>
 
           {/* Menu Quản trị người dùng: Chỉ hiển thị với systemRole === 'ADMIN' */}
           {user?.systemRole === 'ADMIN' && (

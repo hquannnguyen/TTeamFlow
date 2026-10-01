@@ -38,7 +38,7 @@ export class TasksController {
     @Body() dto: MoveTaskDto,
   ) {
     const targetTaskId = taskId ?? id;
-    return this.service.move(targetTaskId!, user.id, dto);
+    return this.service.move(targetTaskId!, user.id, dto, user.systemRole);
   }
 
   @Get("tasks/:taskId")

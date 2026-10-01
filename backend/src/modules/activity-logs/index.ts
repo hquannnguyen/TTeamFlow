@@ -5,4 +5,3 @@ export * from "./dto/activity-log-query.dto";
 export * from "./activity-logs.service";
 export * from "./activity-logs.controller";
 export * from "./activity-logs.module";
-

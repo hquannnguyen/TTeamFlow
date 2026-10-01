@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { ProjectStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { ActivityAction } from "../activity-logs/constants/activity-action.constant";
 import { CreateColumnDto } from "./dto/create-column.dto";
@@ -61,6 +62,9 @@ export class KanbanService {
     if (!project) {
       throw new NotFoundException("Dự án không tồn tại");
     }
+    if (project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException("Dự án đã lưu trữ, không thể thêm cột");
+    }
 
     // Lấy position lớn nhất hiện tại trong project
     const maxCol = await this.prisma.kanbanColumn.findFirst({
@@ -98,9 +102,15 @@ export class KanbanService {
   ) {
     const column = await this.prisma.kanbanColumn.findFirst({
       where: { id: columnId, projectId },
+      include: { project: true },
     });
     if (!column) {
       throw new NotFoundException("Cột không tồn tại hoặc không thuộc dự án");
+    }
+    if (column.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể chỉnh sửa cột",
+      );
     }
 
     return this.prisma.kanbanColumn.update({
@@ -122,6 +132,7 @@ export class KanbanService {
     const column = await this.prisma.kanbanColumn.findFirst({
       where: { id: columnId, projectId },
       include: {
+        project: true,
         _count: {
           select: {
             tasks: {
@@ -134,6 +145,9 @@ export class KanbanService {
 
     if (!column) {
       throw new NotFoundException("Cột không tồn tại hoặc không thuộc dự án");
+    }
+    if (column.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException("Dự án đã lưu trữ, không thể xóa cột");
     }
 
     const taskCount = column._count.tasks;
@@ -180,6 +194,11 @@ export class KanbanService {
     });
     if (!project) {
       throw new NotFoundException("Dự án không tồn tại");
+    }
+    if (project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể sắp xếp lại cột",
+      );
     }
 
     // 2. Chuẩn hóa dữ liệu items từ DTO (hỗ trợ cả columnId và id)

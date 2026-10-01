@@ -6,6 +6,7 @@ interface KanbanListViewProps {
   columns: KanbanColumn[];
   allColumns: KanbanColumn[];
   projectKey?: string;
+  isArchived?: boolean;
   onTaskClick: (task: KanbanTask) => void;
   onMoveTask: (taskId: string, targetColumnId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -54,6 +55,7 @@ export function KanbanListView({
   columns,
   allColumns,
   projectKey = 'TTF',
+  isArchived = false,
   onTaskClick,
   onMoveTask,
   onDeleteTask,
@@ -127,17 +129,19 @@ export function KanbanListView({
                 <span className="kanban-col-count-pill">{column.tasks.length}</span>
               </div>
 
-              <button
-                type="button"
-                className="kanban-list-add-task-btn"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddTask(column.id);
-                }}
-                title={`Thêm công việc vào ${column.name}`}
-              >
-                + Thêm việc
-              </button>
+              {!isArchived && (
+                <button
+                  type="button"
+                  className="kanban-list-add-task-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddTask(column.id);
+                  }}
+                  title={`Thêm công việc vào ${column.name}`}
+                >
+                  + Thêm việc
+                </button>
+              )}
             </div>
 
             {/* Table / List Body */}
@@ -195,6 +199,7 @@ export function KanbanListView({
                               <select
                                 className="kanban-list-status-select"
                                 value={column.id}
+                                disabled={isArchived}
                                 onChange={(e) => onMoveTask(task.id, e.target.value)}
                               >
                                 {allColumns.map((col) => (
@@ -278,22 +283,24 @@ export function KanbanListView({
 
                             {/* Thao tác (Delete) */}
                             <td onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                className="kanban-list-delete-btn"
-                                title="Xóa nhiệm vụ"
-                                onClick={() => {
-                                  if (window.confirm(`Bạn có chắc chắn muốn xóa "${task.title}"?`)) {
-                                    onDeleteTask(task.id);
-                                  }
-                                }}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M3 6h18" />
-                                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                                </svg>
-                              </button>
+                              {!isArchived && (
+                                <button
+                                  type="button"
+                                  className="kanban-list-delete-btn"
+                                  title="Xóa nhiệm vụ"
+                                  onClick={() => {
+                                    if (window.confirm(`Bạn có chắc chắn muốn xóa "${task.title}"?`)) {
+                                      onDeleteTask(task.id);
+                                    }
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M3 6h18" />
+                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                                  </svg>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
