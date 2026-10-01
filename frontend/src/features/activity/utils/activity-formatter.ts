@@ -352,6 +352,101 @@ export function formatActivityLog(
     }
 
     case 'TASK_UPDATED': {
+      if (meta.changeType === 'PRIORITY' || meta.newPriority) {
+        const oldP = asString(meta.oldPriority);
+        const newP = asString(meta.newPriority) || asString(meta.priority);
+        const oldLabel = oldP ? PRIORITY_LABELS[oldP] || oldP : undefined;
+        const newLabel = newP ? PRIORITY_LABELS[newP] || newP : undefined;
+        if (oldLabel && newLabel) {
+          detailChips.push(`${oldLabel} → ${newLabel}`);
+        } else if (newLabel) {
+          detailChips.push(`Mức mới: ${newLabel}`);
+        }
+
+        return {
+          actionLabel: 'Đổi mức độ ưu tiên',
+          entityLabel,
+          tone: 'amber',
+          iconType,
+          description:
+            oldLabel && newLabel
+              ? `đã thay đổi mức độ ưu tiên công việc${taskSuffix} từ "${oldLabel}" sang "${newLabel}".`
+              : `đã thay đổi mức độ ưu tiên công việc${taskSuffix} sang "${newLabel}".`,
+          detailChips,
+          canNavigateToTask: Boolean(log.entityId),
+        };
+      }
+
+      if (meta.changeType === 'DUE_DATE' || meta.newDueDate !== undefined) {
+        const newDue = asString(meta.newDueDate);
+        const oldDue = asString(meta.oldDueDate);
+        if (!newDue) {
+          detailChips.push('Hạn: Đã xóa');
+          return {
+            actionLabel: 'Xóa hạn công việc',
+            entityLabel,
+            tone: 'slate',
+            iconType,
+            description: `đã xóa hạn hoàn thành (deadline) của công việc${taskSuffix}.`,
+            detailChips,
+            canNavigateToTask: Boolean(log.entityId),
+          };
+        }
+
+        const newFormatted = formatExactDateTime(newDue);
+        if (oldDue) {
+          detailChips.push(`Hạn mới: ${newFormatted}`);
+          return {
+            actionLabel: 'Đổi hạn công việc',
+            entityLabel,
+            tone: 'indigo',
+            iconType,
+            description: `đã thay đổi hạn hoàn thành (deadline) của công việc${taskSuffix} từ ${formatExactDateTime(oldDue)} sang ${newFormatted}.`,
+            detailChips,
+            canNavigateToTask: Boolean(log.entityId),
+          };
+        }
+
+        detailChips.push(`Hạn: ${newFormatted}`);
+        return {
+          actionLabel: 'Đặt hạn công việc',
+          entityLabel,
+          tone: 'indigo',
+          iconType,
+          description: `đã đặt hạn hoàn thành (deadline) cho công việc${taskSuffix} là ${newFormatted}.`,
+          detailChips,
+          canNavigateToTask: Boolean(log.entityId),
+        };
+      }
+
+      if (meta.changeType === 'TITLE' || meta.newTitle) {
+        const newTitle = asString(meta.newTitle);
+        if (newTitle) detailChips.push(`Tiêu đề mới: ${newTitle}`);
+        return {
+          actionLabel: 'Đổi tiêu đề',
+          entityLabel,
+          tone: 'indigo',
+          iconType,
+          description: newTitle
+            ? `đã đổi tiêu đề công việc thành "${newTitle}".`
+            : `đã cập nhật tiêu đề công việc${taskSuffix}.`,
+          detailChips,
+          canNavigateToTask: Boolean(log.entityId),
+        };
+      }
+
+      if (meta.changeType === 'DESCRIPTION') {
+        return {
+          actionLabel: 'Cập nhật mô tả',
+          entityLabel,
+          tone: 'indigo',
+          iconType,
+          description: `đã cập nhật mô tả chi tiết của công việc${taskSuffix}.`,
+          detailChips,
+          canNavigateToTask: Boolean(log.entityId),
+        };
+      }
+
       const updatedFields = Array.isArray(meta.updatedFields)
         ? (meta.updatedFields as string[])
         : Object.keys(meta).filter((k) => k !== 'title' && k !== 'taskTitle');
@@ -423,12 +518,34 @@ export function formatActivityLog(
     }
 
     case 'TASK_ASSIGNED': {
+      if (meta.isTransfer) {
+        const fromName =
+          asString(meta.transferredFromUserName) ||
+          resolveUserName(asString(meta.transferredFromUserId), undefined, ctx);
+        const toName =
+          asString(meta.assignedUserName) ||
+          resolveUserName(asString(meta.assignedUserId), undefined, ctx);
+        detailChips.push(`${fromName.trim()} → ${toName.trim()}`);
+
+        return {
+          actionLabel: 'Chuyển giao công việc',
+          entityLabel,
+          tone: 'purple',
+          iconType,
+          description: `đã chuyển giao công việc${taskSuffix} từ ${fromName} cho ${toName}.`,
+          detailChips,
+          canNavigateToTask: Boolean(log.entityId),
+        };
+      }
+
       const assignedUserId = asString(meta.assignedUserId) || asString(meta.userId);
-      const assigneeName = resolveUserName(
-        assignedUserId,
-        asString(meta.assigneeName) || asString(meta.fullName),
-        ctx,
-      );
+      const assigneeName =
+        asString(meta.assignedUserName) ||
+        resolveUserName(
+          assignedUserId,
+          asString(meta.assigneeName) || asString(meta.fullName),
+          ctx,
+        );
       detailChips.push(`Người nhận: ${assigneeName.trim()}`);
 
       return {
@@ -444,11 +561,13 @@ export function formatActivityLog(
 
     case 'TASK_UNASSIGNED': {
       const unassignedUserId = asString(meta.unassignedUserId) || asString(meta.userId);
-      const unassignedName = resolveUserName(
-        unassignedUserId,
-        asString(meta.assigneeName) || asString(meta.fullName),
-        ctx,
-      );
+      const unassignedName =
+        asString(meta.unassignedUserName) ||
+        resolveUserName(
+          unassignedUserId,
+          asString(meta.assigneeName) || asString(meta.fullName),
+          ctx,
+        );
       detailChips.push(`Gỡ phân công: ${unassignedName.trim()}`);
 
       return {

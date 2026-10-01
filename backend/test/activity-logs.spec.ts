@@ -325,12 +325,98 @@ async function runTests() {
   assert.deepStrictEqual(loggedActions[1].metadata, {
     unassignedUserId: targetUserId,
   });
+  // TC-10: Ghi Activity Log khi chuyển giao Task (Handover / Transfer)
+  console.log("--- Test Case 10: Phát hiện Chuyển giao Task (Handover) ---");
+  const updateLogs: any[] = [];
+  const mockUpdatePrisma = {
+    task: {
+      findFirst: async () => ({
+        id: taskId,
+        projectId,
+        title: "Task Gốc",
+        description: "Mô tả",
+        priority: "MEDIUM",
+        startDate: null,
+        dueDate: null,
+        deletedAt: null,
+        assignments: [
+          { userId: "user-1", user: { id: "user-1", fullName: "User 1" } },
+        ],
+      }),
+      update: async ({ data }: any) => ({
+        id: taskId,
+        ...data,
+        assignments: [],
+      }),
+    },
+    projectMember: {
+      findUnique: async () => ({
+        projectId,
+        userId: actorId,
+        role: ProjectRole.MANAGER,
+      }),
+      count: async () => 1,
+    },
+    user: {
+      findMany: async () => [{ id: "user-2", fullName: "User 2" }],
+    },
+    taskAssignment: {
+      deleteMany: async () => ({ count: 1 }),
+      createMany: async () => ({ count: 1 }),
+    },
+    activityLog: {
+      create: async ({ data }: any) => {
+        updateLogs.push(data);
+        return { id: "log-handover", ...data };
+      },
+    },
+    $transaction: async (cb: any) => cb(mockUpdatePrisma),
+  } as unknown as PrismaService;
+
+  const tasksUpdateService = new TasksService(mockUpdatePrisma);
+
+  // 1-to-1 transfer from user-1 to user-2
+  await tasksUpdateService.update(taskId, actorId, {
+    assigneeIds: ["user-2"],
+  });
+
+  assert.strictEqual(updateLogs.length, 1);
+  assert.strictEqual(updateLogs[0].action, ActivityAction.TASK_ASSIGNED);
+  assert.strictEqual(updateLogs[0].metadata.isTransfer, true);
+  assert.strictEqual(updateLogs[0].metadata.transferredFromUserId, "user-1");
+  assert.strictEqual(updateLogs[0].metadata.transferredFromUserName, "User 1");
+  assert.strictEqual(updateLogs[0].metadata.assignedUserId, "user-2");
+  assert.strictEqual(updateLogs[0].metadata.assignedUserName, "User 2");
   console.log(
-    "✅ TC-9b: Gỡ gán task tự động ghi log TASK_UNASSIGNED kèm metadata",
+    "✅ TC-10: Chuyển giao task thành công ghi log TASK_ASSIGNED kèm thông tin Người chuyển giao và Người nhận",
   );
 
+  // TC-11: Ghi Activity Log khi đổi độ ưu tiên và deadline
   console.log(
-    "\n🎉 TOÀN BỘ 9/9 TEST CASES CHO TASK 20 ĐÃ PASS THÀNH CÔNG 100%!\n",
+    "--- Test Case 11: Đổi độ ưu tiên & Hạn deadline tự động ghi log ---",
+  );
+  updateLogs.length = 0;
+  const newDueDate = new Date(Date.now() + 86400000).toISOString();
+  await tasksUpdateService.update(taskId, actorId, {
+    priority: "URGENT" as any,
+    dueDate: newDueDate,
+  });
+
+  assert.strictEqual(updateLogs.length, 2);
+  const priorityLog = updateLogs.find((l) => l.metadata?.changeType === "PRIORITY");
+  const dueDateLog = updateLogs.find((l) => l.metadata?.changeType === "DUE_DATE");
+
+  assert.ok(priorityLog, "Phải có log đổi độ ưu tiên");
+  assert.strictEqual(priorityLog.metadata.oldPriority, "MEDIUM");
+  assert.strictEqual(priorityLog.metadata.newPriority, "URGENT");
+
+  assert.ok(dueDateLog, "Phải có log đổi deadline");
+  assert.strictEqual(dueDateLog.metadata.oldDueDate, null);
+  assert.strictEqual(dueDateLog.metadata.newDueDate, new Date(newDueDate).toISOString());
+  console.log("✅ TC-11: Đổi độ ưu tiên và deadline tự động ghi log TASK_UPDATED chi tiết");
+
+  console.log(
+    "\n🎉 TOÀN BỘ 11/11 TEST CASES CHO TASK 20 ĐÃ PASS THÀNH CÔNG 100%!\n",
   );
 }
 

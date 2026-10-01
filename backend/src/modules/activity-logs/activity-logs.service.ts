@@ -30,6 +30,7 @@ export class ActivityLogsService {
       projectId,
       ...(query?.action ? { action: query.action } : {}),
       ...(query?.entityType ? { entityType: query.entityType } : {}),
+      ...(query?.entityId ? { entityId: query.entityId } : {}),
     };
 
     const [total, data] = await Promise.all([
