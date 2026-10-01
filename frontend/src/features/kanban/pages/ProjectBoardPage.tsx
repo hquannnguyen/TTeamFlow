@@ -127,34 +127,57 @@ export function ProjectBoardPage() {
       newPosition: number;
     }) => moveTask(taskId, targetColumnId, newPosition),
     onMutate: async ({ taskId, targetColumnId }) => {
-      await queryClient.cancelQueries({ queryKey: ['kanban', currentProjectId] });
+      await queryClient.cancelQueries({ queryKey: ['kanban'] });
       const previousBoard = queryClient.getQueryData<KanbanColumn[]>(['kanban', currentProjectId]);
 
       if (previousBoard) {
         let movedTask: KanbanTask | null = null;
-        const nextBoard = previousBoard.map((col) => {
-          const found = col.tasks.find((t) => t.id === taskId);
-          if (found) {
-            movedTask = { ...found, columnId: targetColumnId };
-            return {
-              ...col,
-              tasks: col.tasks.filter((t) => t.id !== taskId),
-            };
-          }
-          return col;
-        });
-
-        if (movedTask) {
-          const targetCol = nextBoard.find((c) => c.id === targetColumnId);
-          if (targetCol) {
-            targetCol.tasks.push(movedTask);
+        for (const col of previousBoard) {
+          const t = col.tasks.find((task) => task.id === taskId);
+          if (t) {
+            movedTask = { ...t, columnId: targetColumnId };
+            break;
           }
         }
 
-        queryClient.setQueryData(['kanban', currentProjectId], nextBoard);
+        if (movedTask) {
+          const nextBoard = previousBoard.map((col) => {
+            const filteredTasks = col.tasks.filter((t) => t.id !== taskId);
+            if (col.id === targetColumnId) {
+              return {
+                ...col,
+                tasks: [...filteredTasks, movedTask!],
+              };
+            }
+            return {
+              ...col,
+              tasks: filteredTasks,
+            };
+          });
+
+          queryClient.setQueryData(['kanban', currentProjectId], nextBoard);
+        }
       }
 
       return { previousBoard };
+    },
+    onSuccess: (_data, variables) => {
+      // Optimistically update taskDetail cache if loaded
+      queryClient.setQueryData<KanbanTask>(['taskDetail', variables.taskId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          columnId: variables.targetColumnId,
+        };
+      });
+
+      // Invalidate all related queries so board, list view, task details, and activity feeds refresh immediately
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['taskDetail'] });
+      queryClient.invalidateQueries({ queryKey: ['task'] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
     onError: (err: unknown, _vars, context) => {
       if (context?.previousBoard) {
@@ -168,8 +191,11 @@ export function ProjectBoardPage() {
       toast.error(typeof msg === 'string' ? msg : JSON.stringify(msg));
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['kanban', currentProjectId] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard', currentProjectId] });
+      queryClient.invalidateQueries({ queryKey: ['kanban'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['project-activity-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['taskDetail'] });
     },
   });
 
@@ -626,8 +652,19 @@ export function ProjectBoardPage() {
                 if (isArchived) return;
                 e.preventDefault();
                 setDragOverColumnId(null);
-                const rawData = e.dataTransfer.getData('text/plain');
-                if (rawData.startsWith('column:')) {
+                let rawData = e.dataTransfer.getData('text/plain');
+                if (!rawData) {
+                  try {
+                    const json = e.dataTransfer.getData('application/json');
+                    if (json) {
+                      const parsed = JSON.parse(json);
+                      if (parsed.taskId) rawData = parsed.taskId;
+                    }
+                  } catch {
+                    // Ignore parse error
+                  }
+                }
+                if (rawData?.startsWith('column:')) {
                   const draggedColId = rawData.replace('column:', '');
                   if (draggedColId && draggedColId !== column.id) {
                     const fromIndex = columns.findIndex((c) => c.id === draggedColId);
@@ -644,7 +681,7 @@ export function ProjectBoardPage() {
                     }
                   }
                 } else if (rawData) {
-                  const taskId = rawData.replace('task:', '');
+                  const taskId = rawData.replace(/^task:/, '');
                   if (taskId) {
                     handleMoveTask(taskId, column.id);
                   }
@@ -750,7 +787,17 @@ export function ProjectBoardPage() {
               </div>
 
               {/* Tasks List Box */}
-              <div className="kanban-tasks-list-box">
+              <div
+                className="kanban-tasks-list-box"
+                onDragOver={(e) => {
+                  if (isArchived) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  if (dragOverColumnId !== column.id) {
+                    setDragOverColumnId(column.id);
+                  }
+                }}
+              >
                 {column.tasks.length === 0 ? (
                   <div
                     style={{
@@ -840,11 +887,7 @@ export function ProjectBoardPage() {
           navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
         }}
         onMoveTask={(taskId, targetColumnId) => {
-          moveTaskMutation.mutate({
-            taskId,
-            targetColumnId,
-            newPosition: 1000,
-          });
+          handleMoveTask(taskId, targetColumnId);
         }}
         onDeleteTask={(taskId) => {
           deleteTaskMutation.mutate(taskId);

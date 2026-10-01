@@ -102,6 +102,12 @@ export function KanbanTaskCard({
         setIsDragging(false);
         onDragEnd?.(e);
       }}
+      onDragOver={(e) => {
+        if (!isArchived) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+        }
+      }}
       onClick={onClick}
     >
       {/* Top Row: Task Key & Three-dots Menu */}

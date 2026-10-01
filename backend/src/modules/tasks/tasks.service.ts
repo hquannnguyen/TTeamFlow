@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { ProjectRole, ProjectStatus } from "@prisma/client";
+import { Prisma, ProjectRole, ProjectStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { MoveTaskDto } from "./dto/move-task.dto";
@@ -93,7 +93,12 @@ export class TasksService {
     });
   }
 
-  async move(taskId: string, actorId: string, dto: MoveTaskDto) {
+  async move(
+    taskId: string,
+    actorId: string,
+    dto: MoveTaskDto,
+    systemRole: SystemRole = SystemRole.USER,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
       include: { column: true, project: true },
@@ -104,14 +109,16 @@ export class TasksService {
       throw new BadRequestException("Dự án đã lưu trữ, không thể chỉnh sửa");
     }
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: { projectId: task.projectId, userId: actorId },
-      },
-    });
+    if (systemRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: { projectId: task.projectId, userId: actorId },
+        },
+      });
 
-    if (!member || member.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException("Bạn không có quyền di chuyển task");
+      if (!member || member.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException("Bạn không có quyền di chuyển task");
+      }
     }
 
     const target = await this.prisma.kanbanColumn.findFirst({
@@ -188,7 +195,9 @@ export class TasksService {
           entityId: task.id,
           metadata: {
             fromColumnId: task.columnId,
+            fromColumnName: task.column.name,
             toColumnId: target.id,
+            toColumnName: target.name,
             newPosition: updated.position,
           },
         },
@@ -239,6 +248,15 @@ export class TasksService {
   async update(taskId: string, actorId: string, dto: UpdateTaskDto) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
+      include: {
+        assignments: {
+          include: {
+            user: {
+              select: { id: true, fullName: true },
+            },
+          },
+        },
+      },
     });
     if (!task) throw new NotFoundException("Task không tồn tại");
 
@@ -289,12 +307,104 @@ export class TasksService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      let hasLogged = false;
+
+      // Xử lý thay đổi người được phân công (Assignees) & ghi log Chuyển giao / Phân công / Gỡ
       if (dto.assigneeIds !== undefined) {
-        await tx.taskAssignment.deleteMany({ where: { taskId } });
-        if (dto.assigneeIds.length) {
-          await tx.taskAssignment.createMany({
-            data: dto.assigneeIds.map((userId) => ({ taskId, userId })),
-          });
+        const oldAssignments = task.assignments || [];
+        const oldAssigneeMap = new Map(
+          oldAssignments.map((a) => [a.user.id, a.user.fullName]),
+        );
+        const oldAssigneeIds = Array.from(oldAssigneeMap.keys());
+        const newAssigneeIds = Array.from(new Set(dto.assigneeIds));
+
+        const addedIds = newAssigneeIds.filter((id) => !oldAssigneeMap.has(id));
+        const removedIds = oldAssigneeIds.filter(
+          (id) => !newAssigneeIds.includes(id),
+        );
+
+        if (addedIds.length > 0 || removedIds.length > 0) {
+          await tx.taskAssignment.deleteMany({ where: { taskId } });
+          if (newAssigneeIds.length) {
+            await tx.taskAssignment.createMany({
+              data: newAssigneeIds.map((userId) => ({ taskId, userId })),
+            });
+          }
+
+          const addedUsers =
+            addedIds.length > 0
+              ? await tx.user.findMany({
+                  where: { id: { in: addedIds } },
+                  select: { id: true, fullName: true },
+                })
+              : [];
+          const addedUserMap = new Map(
+            addedUsers.map((u) => [u.id, u.fullName]),
+          );
+
+          // Phát hiện Chuyển giao trực tiếp (1 người cũ -> 1 người mới)
+          if (removedIds.length === 1 && addedIds.length === 1) {
+            const fromId = removedIds[0];
+            const toId = addedIds[0];
+            const fromName = oldAssigneeMap.get(fromId) ?? "thành viên";
+            const toName = addedUserMap.get(toId) ?? "thành viên";
+
+            await tx.activityLog.create({
+              data: {
+                projectId: task.projectId,
+                actorId,
+                action: "TASK_ASSIGNED",
+                entityType: "TASK",
+                entityId: task.id,
+                metadata: {
+                  isTransfer: true,
+                  transferredFromUserId: fromId,
+                  transferredFromUserName: fromName,
+                  assignedUserId: toId,
+                  assignedUserName: toName,
+                },
+              },
+            });
+            hasLogged = true;
+          } else {
+            // Ghi nhận gỡ thành viên
+            for (const rId of removedIds) {
+              await tx.activityLog.create({
+                data: {
+                  projectId: task.projectId,
+                  actorId,
+                  action: "TASK_UNASSIGNED",
+                  entityType: "TASK",
+                  entityId: task.id,
+                  metadata: {
+                    unassignedUserId: rId,
+                    unassignedUserName:
+                      oldAssigneeMap.get(rId) ?? "thành viên",
+                  },
+                },
+              });
+              hasLogged = true;
+            }
+
+            // Ghi nhận gán thành viên mới
+            for (const aId of addedIds) {
+              await tx.activityLog.create({
+                data: {
+                  projectId: task.projectId,
+                  actorId,
+                  action: "TASK_ASSIGNED",
+                  entityType: "TASK",
+                  entityId: task.id,
+                  metadata: {
+                    assignedUserId: aId,
+                    assignedUserName:
+                      addedUserMap.get(aId) ?? "thành viên",
+                  },
+                },
+              });
+              hasLogged = true;
+            }
+          }
         }
       }
 
@@ -328,15 +438,102 @@ export class TasksService {
         },
       });
 
-      await tx.activityLog.create({
-        data: {
-          projectId: task.projectId,
-          actorId,
-          action: "TASK_UPDATED",
-          entityType: "TASK",
-          entityId: task.id,
-        },
-      });
+      // Ghi log khi thay đổi mức độ ưu tiên
+      if (dto.priority !== undefined && dto.priority !== task.priority) {
+        await tx.activityLog.create({
+          data: {
+            projectId: task.projectId,
+            actorId,
+            action: "TASK_UPDATED",
+            entityType: "TASK",
+            entityId: task.id,
+            metadata: {
+              changeType: "PRIORITY",
+              field: "priority",
+              oldPriority: task.priority,
+              newPriority: dto.priority,
+            },
+          },
+        });
+        hasLogged = true;
+      }
+
+      // Ghi log khi thay đổi thời hạn deadline
+      if (dto.dueDate !== undefined) {
+        const oldDue = task.dueDate ? task.dueDate.toISOString() : null;
+        const newDue = dto.dueDate ? new Date(dto.dueDate).toISOString() : null;
+        if (oldDue !== newDue) {
+          await tx.activityLog.create({
+            data: {
+              projectId: task.projectId,
+              actorId,
+              action: "TASK_UPDATED",
+              entityType: "TASK",
+              entityId: task.id,
+              metadata: {
+                changeType: "DUE_DATE",
+                field: "dueDate",
+                oldDueDate: oldDue,
+                newDueDate: newDue,
+              },
+            },
+          });
+          hasLogged = true;
+        }
+      }
+
+      // Ghi log khi đổi tiêu đề
+      if (dto.title !== undefined && dto.title.trim() !== task.title) {
+        await tx.activityLog.create({
+          data: {
+            projectId: task.projectId,
+            actorId,
+            action: "TASK_UPDATED",
+            entityType: "TASK",
+            entityId: task.id,
+            metadata: {
+              changeType: "TITLE",
+              field: "title",
+              oldTitle: task.title,
+              newTitle: dto.title.trim(),
+            },
+          },
+        });
+        hasLogged = true;
+      }
+
+      // Ghi log khi đổi mô tả
+      if (
+        dto.description !== undefined &&
+        (dto.description?.trim() ?? null) !== (task.description ?? null)
+      ) {
+        await tx.activityLog.create({
+          data: {
+            projectId: task.projectId,
+            actorId,
+            action: "TASK_UPDATED",
+            entityType: "TASK",
+            entityId: task.id,
+            metadata: {
+              changeType: "DESCRIPTION",
+              field: "description",
+            },
+          },
+        });
+        hasLogged = true;
+      }
+
+      if (!hasLogged) {
+        await tx.activityLog.create({
+          data: {
+            projectId: task.projectId,
+            actorId,
+            action: "TASK_UPDATED",
+            entityType: "TASK",
+            entityId: task.id,
+          },
+        });
+      }
 
       return updatedTask;
     });
@@ -401,6 +598,9 @@ export class TasksService {
       where: {
         projectId_userId: { projectId: task.projectId, userId: targetUserId },
       },
+      include: {
+        user: { select: { id: true, fullName: true } },
+      },
     });
     if (!targetMember) {
       throw new BadRequestException("Người được gán không thuộc dự án");
@@ -430,6 +630,9 @@ export class TasksService {
           entityId: task.id,
           metadata: {
             assignedUserId: targetUserId,
+            ...(targetMember?.user?.fullName
+              ? { assignedUserName: targetMember.user.fullName }
+              : {}),
           },
         },
       });
@@ -457,6 +660,9 @@ export class TasksService {
 
     const existing = await this.prisma.taskAssignment.findUnique({
       where: { taskId_userId: { taskId, userId: targetUserId } },
+      include: {
+        user: { select: { id: true, fullName: true } },
+      },
     });
     if (!existing) {
       throw new NotFoundException("Thành viên chưa được gán vào task này");
@@ -476,6 +682,9 @@ export class TasksService {
           entityId: task.id,
           metadata: {
             unassignedUserId: targetUserId,
+            ...(existing?.user?.fullName
+              ? { unassignedUserName: existing.user.fullName }
+              : {}),
           },
         },
       });
