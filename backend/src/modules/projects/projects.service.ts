@@ -253,6 +253,12 @@ export class ProjectsService {
     });
     if (!project) throw new NotFoundException("Không tìm thấy dự án");
 
+    if (project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể chỉnh sửa thông tin",
+      );
+    }
+
     const isAdmin = actorRole === SystemRole.ADMIN;
     const member = await this.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId: actorId } },

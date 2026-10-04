@@ -6,16 +6,20 @@ import {
   ParseUUIDPipe,
   Patch,
   Query,
+  UseGuards,
 } from "@nestjs/common";
 import { SystemRole } from "@prisma/client";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { SystemRoles } from "../../common/decorators/system-roles.decorator";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { SystemRoleGuard } from "../../common/guards/system-role.guard";
 import type { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { AdminUsersService } from "./admin-users.service";
 import { QueryUsersDto } from "./dto/query-users.dto";
 import { UpdateUserStatusDto } from "./dto/update-user-status.dto";
 
 @Controller("admin/users")
+@UseGuards(JwtAuthGuard, SystemRoleGuard)
 @SystemRoles(SystemRole.ADMIN)
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}
@@ -39,4 +43,3 @@ export class AdminUsersController {
     return this.adminUsersService.updateUserStatus(userId, admin.id, dto);
   }
 }
-

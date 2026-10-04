@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { ProjectRole, ProjectStatus } from "@prisma/client";
+import { ProjectRole, ProjectStatus, SystemRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateCommentDto } from "./dto/create-comment.dto";
 import { UpdateCommentDto } from "./dto/update-comment.dto";
@@ -13,7 +13,7 @@ import { UpdateCommentDto } from "./dto/update-comment.dto";
 export class CommentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(taskId: string, actorId: string) {
+  async findAll(taskId: string, actorId: string, actorRole?: SystemRole) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
     });
@@ -21,16 +21,18 @@ export class CommentsService {
       throw new NotFoundException("Task không tồn tại");
     }
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId: task.projectId,
-          userId: actorId,
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: {
+            projectId: task.projectId,
+            userId: actorId,
+          },
         },
-      },
-    });
-    if (!member) {
-      throw new ForbiddenException("Bạn không có quyền trong dự án này");
+      });
+      if (!member) {
+        throw new ForbiddenException("Bạn không có quyền trong dự án này");
+      }
     }
 
     return this.prisma.comment.findMany({
@@ -49,7 +51,12 @@ export class CommentsService {
     });
   }
 
-  async create(taskId: string, actorId: string, dto: CreateCommentDto) {
+  async create(
+    taskId: string,
+    actorId: string,
+    dto: CreateCommentDto,
+    actorRole?: SystemRole,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
       include: { project: true },
@@ -62,18 +69,20 @@ export class CommentsService {
       throw new BadRequestException("Dự án đã lưu trữ, không thể bình luận");
     }
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId: task.projectId,
-          userId: actorId,
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: {
+            projectId: task.projectId,
+            userId: actorId,
+          },
         },
-      },
-    });
-    if (!member || member.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException(
-        "Bạn không có quyền bình luận trong task này",
-      );
+      });
+      if (!member || member.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException(
+          "Bạn không có quyền bình luận trong task này",
+        );
+      }
     }
 
     return this.prisma.comment.create({
@@ -139,7 +148,7 @@ export class CommentsService {
     });
   }
 
-  async remove(commentId: string, actorId: string) {
+  async remove(commentId: string, actorId: string, actorRole?: SystemRole) {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
       include: {
@@ -158,8 +167,8 @@ export class CommentsService {
       );
     }
 
-    // Quy tắc: Chỉ owner của comment mới có quyền xóa
-    if (comment.userId !== actorId) {
+    // Quy tắc: Chỉ owner của comment hoặc ADMIN mới có quyền xóa
+    if (comment.userId !== actorId && actorRole !== SystemRole.ADMIN) {
       throw new ForbiddenException("Chỉ người tạo bình luận mới có quyền xóa");
     }
 

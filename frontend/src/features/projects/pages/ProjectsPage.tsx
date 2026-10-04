@@ -177,7 +177,7 @@ export function ProjectsPage() {
   function getUserRoleInProject(project: Project) {
     if (currentUser?.systemRole === 'ADMIN') return 'OWNER';
     const member = project.members?.find((m) => m.user?.id === currentUser?.id);
-    return member?.role || project.members?.[0]?.role || 'MEMBER';
+    return member?.role || 'VIEWER';
   }
 
   // Handlers

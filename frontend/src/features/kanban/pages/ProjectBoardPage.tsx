@@ -90,20 +90,23 @@ export function ProjectBoardPage() {
   const [createDefaultColumnId, setCreateDefaultColumnId] = useState<string>('');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
-  // Current user & RBAC permission to invite members
+  // Current user & RBAC permissions in project
   const currentUser = useAuthStore((s) => s.user);
   const isArchived = project?.status === 'ARCHIVED';
 
-  const canInviteMembers = useMemo(() => {
-    if (isArchived) return false;
-    if (!currentUser) return false;
-    if (currentUser.systemRole === 'ADMIN') return true;
-    if (!project?.members) return false;
-    const myMembership = project.members.find(
+  const myProjectRole = useMemo(() => {
+    if (!currentUser) return 'VIEWER';
+    if (currentUser.systemRole === 'ADMIN') return 'OWNER';
+    const myMembership = project?.members?.find(
       (m) => m.user?.id === currentUser.id,
     );
-    return myMembership?.role === 'OWNER' || myMembership?.role === 'MANAGER';
-  }, [currentUser, project, isArchived]);
+    return myMembership?.role || 'VIEWER';
+  }, [currentUser, project]);
+
+  const canInviteMembers = !isArchived && (myProjectRole === 'OWNER' || myProjectRole === 'MANAGER');
+  const canManageColumns = !isArchived && (myProjectRole === 'OWNER' || myProjectRole === 'MANAGER');
+  const canEditTasks = !isArchived && (myProjectRole === 'OWNER' || myProjectRole === 'MANAGER' || myProjectRole === 'MEMBER');
+  const canDeleteTasks = !isArchived && (myProjectRole === 'OWNER' || myProjectRole === 'MANAGER');
 
   // Drag & drop drop target state
   const [dragOverColumnId, setDragOverColumnId] = useState<string | null>(null);
@@ -603,14 +606,14 @@ export function ProjectBoardPage() {
             ? 'doing'
             : 'todo';
 
-          const isDragOver = !isArchived && dragOverColumnId === column.id;
+          const isDragOver = canEditTasks && dragOverColumnId === column.id;
 
           return (
             <div
               className={`kanban-column-card ${isDragOver ? 'drag-over' : ''}`}
               key={column.id}
               onDragOver={(e) => {
-                if (isArchived) return;
+                if (!canEditTasks) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
                 if (dragOverColumnId !== column.id) {
@@ -618,16 +621,17 @@ export function ProjectBoardPage() {
                 }
               }}
               onDragLeave={(e) => {
-                if (isArchived) return;
+                if (!canEditTasks) return;
                 if (e.currentTarget.contains(e.relatedTarget as Node)) return;
                 setDragOverColumnId(null);
               }}
               onDrop={(e) => {
-                if (isArchived) return;
+                if (!canEditTasks) return;
                 e.preventDefault();
                 setDragOverColumnId(null);
                 const rawData = e.dataTransfer.getData('text/plain');
                 if (rawData.startsWith('column:')) {
+                  if (!canManageColumns) return;
                   const draggedColId = rawData.replace('column:', '');
                   if (draggedColId && draggedColId !== column.id) {
                     const fromIndex = columns.findIndex((c) => c.id === draggedColId);
@@ -654,20 +658,20 @@ export function ProjectBoardPage() {
               {/* Column Header (Draggable for reordering columns) */}
               <div
                 className={`kanban-col-header-bar ${colType}`}
-                draggable={!isArchived}
+                draggable={canManageColumns}
                 onDragStart={(e) => {
-                  if (isArchived) {
+                  if (!canManageColumns) {
                     e.preventDefault();
                     return;
                   }
                   e.dataTransfer.setData('text/plain', `column:${column.id}`);
                   e.dataTransfer.effectAllowed = 'move';
                 }}
-                style={{ cursor: isArchived ? 'default' : 'grab' }}
-                title={isArchived ? column.name : 'Kéo thả để thay đổi thứ tự cột'}
+                style={{ cursor: canManageColumns ? 'grab' : 'default' }}
+                title={canManageColumns ? 'Kéo thả để thay đổi thứ tự cột' : column.name}
               >
                 <div className="kanban-col-title-group">
-                  {!isArchived && (
+                  {canManageColumns && (
                     <div className="kanban-col-drag-handle" title="Kéo thả để thay đổi thứ tự cột">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <circle cx="9" cy="5" r="1" fill="currentColor"/>
@@ -682,7 +686,7 @@ export function ProjectBoardPage() {
                   <span className={`kanban-col-dot ${colType}`} />
 
                   {/* Inline Rename Column (6.3.2) */}
-                  {!isArchived && editingColumnId === column.id ? (
+                  {canManageColumns && editingColumnId === column.id ? (
                     <input
                       type="text"
                       className="kanban-col-name-input"
@@ -698,9 +702,9 @@ export function ProjectBoardPage() {
                   ) : (
                     <span
                       className="kanban-col-name"
-                      title={isArchived ? column.name : 'Double click để đổi tên cột'}
+                      title={canManageColumns ? 'Double click để đổi tên cột' : column.name}
                       onDoubleClick={() => {
-                        if (isArchived) return;
+                        if (!canManageColumns) return;
                         setEditingColumnId(column.id);
                         setEditingColumnName(column.name);
                       }}
@@ -712,39 +716,43 @@ export function ProjectBoardPage() {
                   <span className="kanban-col-count-pill">{column.tasks.length}</span>
                 </div>
 
-                {!isArchived && (
+                {(canEditTasks || canManageColumns) && (
                   <div className="kanban-col-header-actions">
                     {/* Add Task to Column */}
-                    <button
-                      type="button"
-                      className="kanban-col-icon-btn"
-                      title="Thêm nhiệm vụ vào cột này"
-                      onClick={() => {
-                        setCreateDefaultColumnId(column.id);
-                        setIsCreateModalOpen(true);
-                      }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="12" x2="12" y1="5" y2="19" />
-                        <line x1="5" x2="19" y1="12" y2="12" />
-                      </svg>
-                    </button>
+                    {canEditTasks && (
+                      <button
+                        type="button"
+                        className="kanban-col-icon-btn"
+                        title="Thêm nhiệm vụ vào cột này"
+                        onClick={() => {
+                          setCreateDefaultColumnId(column.id);
+                          setIsCreateModalOpen(true);
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="12" x2="12" y1="5" y2="19" />
+                          <line x1="5" x2="19" y1="12" y2="12" />
+                        </svg>
+                      </button>
+                    )}
 
                     {/* Delete Column (6.3.2) */}
-                    <button
-                      type="button"
-                      className="kanban-col-icon-btn delete"
-                      title="Xóa cột này"
-                      onClick={() => {
-                        setDeletingColumn(column);
-                      }}
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M3 6h18" />
-                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                      </svg>
-                    </button>
+                    {canManageColumns && (
+                      <button
+                        type="button"
+                        className="kanban-col-icon-btn delete"
+                        title="Xóa cột này"
+                        onClick={() => {
+                          setDeletingColumn(column);
+                        }}
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 6h18" />
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -769,7 +777,8 @@ export function ProjectBoardPage() {
                       task={task}
                       projectKey={project?.projectKey || 'TTF'}
                       isCompletedColumn={column.isCompleted}
-                      isArchived={isArchived}
+                      isArchived={!canEditTasks}
+                      canDelete={canDeleteTasks}
                       onDeleteTask={(taskId) => deleteTaskMutation.mutate(taskId)}
                       onClick={() => {
                         navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
@@ -783,7 +792,7 @@ export function ProjectBoardPage() {
         })}
 
         {/* ── Add New Column Card (6.3.2 Thêm cột) ── */}
-        {!isArchived && (
+        {canManageColumns && (
           isAddingColumn ? (
             <div className="kanban-column-card" style={{ padding: '16px', gap: '12px' }}>
               <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>Thêm cột mới</h4>
@@ -835,7 +844,8 @@ export function ProjectBoardPage() {
         columns={filteredColumns}
         allColumns={columns}
         projectKey={project?.projectKey || 'TTF'}
-        isArchived={isArchived}
+        isArchived={!canEditTasks}
+        canDelete={canDeleteTasks}
         onTaskClick={(task) => {
           navigate(currentProjectId ? `/projects/${currentProjectId}/tasks/${task.id}` : `/tasks/${task.id}`);
         }}

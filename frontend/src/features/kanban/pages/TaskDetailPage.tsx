@@ -19,6 +19,7 @@ import { getProject } from '../../projects/api/projects.api';
 import { getMediaUrl } from '../../../api/http';
 import { toast } from '../../../components/ui/toast.store';
 import { MemberAutocomplete } from '../components/MemberAutocomplete';
+import { useAuthStore } from '../../auth/store/auth.store';
 
 function getInitials(name?: string) {
   if (!name) return '?';
@@ -245,7 +246,17 @@ export function TaskDetailPage() {
     },
   });
 
+  const currentUser = useAuthStore((s) => s.user);
   const members = useMemo(() => project?.members || [], [project?.members]);
+  const myProjectRole = useMemo(() => {
+    if (!currentUser) return 'VIEWER';
+    if (currentUser.systemRole === 'ADMIN') return 'OWNER';
+    const myMembership = members.find((m) => m.user?.id === currentUser.id);
+    return myMembership?.role || 'VIEWER';
+  }, [currentUser, members]);
+  const isViewer = myProjectRole === 'VIEWER';
+  const isReadOnly = isArchived || isViewer;
+
   const assignedUsers = task?.assignments?.map((a) => a.user) || [];
   const assignedUserIds = new Set(assignedUsers.map((u) => u.id));
   const unassignedMembers = members.filter((m) => !assignedUserIds.has(m.user.id));
@@ -432,7 +443,7 @@ export function TaskDetailPage() {
         <div className="task-detail-meta-card">
           <div className="task-detail-header-row">
             <div className="task-detail-title-col">
-              {!isArchived && isEditingTitle ? (
+              {!isReadOnly && isEditingTitle ? (
                 <input
                   type="text"
                   className="task-title-input"
@@ -457,10 +468,10 @@ export function TaskDetailPage() {
               ) : (
                 <h1
                   className="task-detail-main-title"
-                  style={{ cursor: isArchived ? 'default' : 'pointer' }}
-                  title={isArchived ? task?.title : 'Click để chỉnh sửa tiêu đề'}
+                  style={{ cursor: isReadOnly ? 'default' : 'pointer' }}
+                  title={isReadOnly ? task?.title : 'Click để chỉnh sửa tiêu đề'}
                   onClick={() => {
-                    if (!isArchived) setIsEditingTitle(true);
+                    if (!isReadOnly) setIsEditingTitle(true);
                   }}
                 >
                   {task?.title}
@@ -475,9 +486,9 @@ export function TaskDetailPage() {
                 <select
                   className="task-status-select-pill"
                   value={task?.columnId || ''}
-                  disabled={isArchived}
+                  disabled={isReadOnly}
                   onChange={(e) => moveTaskMutation.mutate(e.target.value)}
-                  title={isArchived ? 'Dự án đã lưu trữ' : 'Bấm để thay đổi trạng thái'}
+                  title={isReadOnly ? 'Chế độ chỉ đọc' : 'Bấm để thay đổi trạng thái'}
                 >
                   {columns.map((col) => (
                     <option key={col.id} value={col.id}>
@@ -515,7 +526,7 @@ export function TaskDetailPage() {
                           <div className="assignee-chip-avatar">{getInitials(u.fullName)}</div>
                         )}
                         <span className="assignee-chip-name">{u.fullName}</span>
-                        {!isArchived && (
+                        {!isReadOnly && (
                           <button
                             type="button"
                             className="btn-remove-assignee-chip"
@@ -536,7 +547,7 @@ export function TaskDetailPage() {
                 )}
 
                 {/* Searchable input to add assignee */}
-                {!isArchived && unassignedMembers.length > 0 && (
+                {!isReadOnly && unassignedMembers.length > 0 && (
                   <MemberAutocomplete
                     members={unassignedMembers}
                     mode="add"
@@ -555,7 +566,7 @@ export function TaskDetailPage() {
               <select
                 className="task-meta-select priority"
                 value={task?.priority || 'MEDIUM'}
-                disabled={isArchived}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   updateTaskMutation.mutate({
                     priority: e.target.value as 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT',
@@ -575,7 +586,7 @@ export function TaskDetailPage() {
                 type="datetime-local"
                 className="task-meta-date-input"
                 value={formatDateForInput(task?.dueDate)}
-                disabled={isArchived}
+                disabled={isReadOnly}
                 onChange={(e) => {
                   const val = e.target.value;
                   const dateVal = val ? new Date(`${val}:00+07:00`).toISOString() : null;
@@ -612,12 +623,12 @@ export function TaskDetailPage() {
                 <textarea
                   className="task-desc-textarea"
                   rows={5}
-                  placeholder={isArchived ? 'Chưa có mô tả cho nhiệm vụ này.' : 'Mô tả nội dung công việc cần làm...'}
+                  placeholder={isReadOnly ? 'Chưa có mô tả cho nhiệm vụ này.' : 'Mô tả nội dung công việc cần làm...'}
                   value={description}
-                  disabled={isArchived}
+                  disabled={isReadOnly}
                   onChange={(e) => setDescription(e.target.value)}
                 />
-                {!isArchived && (
+                {!isReadOnly && (
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
                     <button
                       type="button"
@@ -640,7 +651,7 @@ export function TaskDetailPage() {
                         <input
                           type="checkbox"
                           checked={isChecked}
-                          disabled={isArchived}
+                          disabled={isReadOnly}
                           onChange={(e) =>
                             updateChecklistMutation.mutate({
                               id: item.id,
@@ -651,7 +662,7 @@ export function TaskDetailPage() {
                         <span className={`checklist-text ${isChecked ? 'done' : ''}`}>
                           {item.content}
                         </span>
-                        {!isArchived && (
+                        {!isReadOnly && (
                           <button
                             type="button"
                             className="checklist-del-btn"
@@ -665,7 +676,7 @@ export function TaskDetailPage() {
                   })}
                 </div>
 
-                {!isArchived && (
+                {!isReadOnly && (
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
@@ -714,7 +725,7 @@ export function TaskDetailPage() {
           <div className="task-tab-content">
             {activeBottomTab === 'comments' ? (
               <div className="comments-container">
-                {!isArchived && (
+                {!isReadOnly && (
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
@@ -788,18 +799,28 @@ export function TaskDetailPage() {
 
                 <div className="comments-stream">
                   {comments.map((c) => {
-                    const authorAvatar = getMediaUrl(c.author?.avatarUrl);
+                    const commentAuthor = c.author || c.user;
+                    const authorAvatar = getMediaUrl(commentAuthor?.avatarUrl);
+                    const isCommentOwner =
+                      Boolean(currentUser?.id) &&
+                      (c.authorId === currentUser?.id ||
+                        c.userId === currentUser?.id ||
+                        commentAuthor?.id === currentUser?.id);
+                    const canDeleteComment =
+                      !isArchived &&
+                      (currentUser?.systemRole === 'ADMIN' || isCommentOwner);
+
                     return (
                       <div key={c.id} className="comment-item">
                         {authorAvatar ? (
-                          <img src={authorAvatar} alt={c.author?.fullName} className="comment-avatar" />
+                          <img src={authorAvatar} alt={commentAuthor?.fullName} className="comment-avatar" />
                         ) : (
-                          <div className="comment-avatar">{getInitials(c.author?.fullName)}</div>
+                          <div className="comment-avatar">{getInitials(commentAuthor?.fullName)}</div>
                         )}
 
                         <div className="comment-body">
                           <div className="comment-meta">
-                            <span className="comment-author">{c.author?.fullName || 'Thành viên'}</span>
+                            <span className="comment-author">{commentAuthor?.fullName || 'Thành viên'}</span>
                             <span className="comment-time">
                               {new Intl.DateTimeFormat('vi-VN', {
                                 timeZone: 'Asia/Ho_Chi_Minh',
@@ -812,7 +833,7 @@ export function TaskDetailPage() {
                           <p className="comment-text">{renderCommentWithMentions(c.content)}</p>
                         </div>
 
-                        {!isArchived && (
+                        {canDeleteComment && (
                           <button
                             type="button"
                             className="comment-del-btn"

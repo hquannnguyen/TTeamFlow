@@ -7,6 +7,7 @@ interface KanbanListViewProps {
   allColumns: KanbanColumn[];
   projectKey?: string;
   isArchived?: boolean;
+  canDelete?: boolean;
   onTaskClick: (task: KanbanTask) => void;
   onMoveTask: (taskId: string, targetColumnId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -56,6 +57,7 @@ export function KanbanListView({
   allColumns,
   projectKey = 'TTF',
   isArchived = false,
+  canDelete = true,
   onTaskClick,
   onMoveTask,
   onDeleteTask,
@@ -283,7 +285,7 @@ export function KanbanListView({
 
                             {/* Thao tác (Delete) */}
                             <td onClick={(e) => e.stopPropagation()}>
-                              {!isArchived && (
+                              {!isArchived && canDelete && (
                                 <button
                                   type="button"
                                   className="kanban-list-delete-btn"

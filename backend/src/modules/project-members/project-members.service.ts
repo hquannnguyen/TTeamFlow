@@ -124,6 +124,7 @@ export class ProjectMembersService {
     const targetMember = await this.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId: targetUserId } },
       include: {
+        project: { select: { status: true } },
         user: {
           select: {
             id: true,
@@ -137,6 +138,12 @@ export class ProjectMembersService {
 
     if (!targetMember) {
       throw new NotFoundException("Không tìm thấy thành viên trong dự án");
+    }
+
+    if (targetMember.project?.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể thay đổi vai trò thành viên",
+      );
     }
 
     // MANAGER không được quản lý OWNER
@@ -208,6 +215,7 @@ export class ProjectMembersService {
     const targetMember = await this.prisma.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId: targetUserId } },
       include: {
+        project: { select: { status: true } },
         user: {
           select: {
             id: true,
@@ -221,6 +229,12 @@ export class ProjectMembersService {
 
     if (!targetMember) {
       throw new NotFoundException("Không tìm thấy thành viên trong dự án");
+    }
+
+    if (targetMember.project?.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể xóa thành viên khỏi dự án",
+      );
     }
 
     // MANAGER không được quản lý OWNER

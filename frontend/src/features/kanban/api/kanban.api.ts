@@ -127,9 +127,15 @@ export async function reorderColumns(
 export interface CommentItem {
   id: string;
   taskId: string;
+  userId?: string;
   authorId: string;
   content: string;
   createdAt: string;
+  user?: {
+    id: string;
+    fullName: string;
+    avatarUrl?: string | null;
+  };
   author?: {
     id: string;
     fullName: string;

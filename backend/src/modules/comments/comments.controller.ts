@@ -6,20 +6,24 @@ import {
   Param,
   Patch,
   Post,
+  UseGuards,
 } from "@nestjs/common";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
+import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
+import { ProjectRoleGuard } from "../../common/guards/project-role.guard";
 import type { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { CommentsService } from "./comments.service";
 import { CreateCommentDto } from "./dto/create-comment.dto";
 import { UpdateCommentDto } from "./dto/update-comment.dto";
 
 @Controller()
+@UseGuards(JwtAuthGuard, ProjectRoleGuard)
 export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
 
   @Get(["tasks/:taskId/comments", "projects/:projectId/tasks/:taskId/comments"])
   findAll(@Param("taskId") taskId: string, @CurrentUser() user: AuthUser) {
-    return this.commentsService.findAll(taskId, user.id);
+    return this.commentsService.findAll(taskId, user.id, user.systemRole);
   }
 
   @Post([
@@ -31,7 +35,7 @@ export class CommentsController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateCommentDto,
   ) {
-    return this.commentsService.create(taskId, user.id, dto);
+    return this.commentsService.create(taskId, user.id, dto, user.systemRole);
   }
 
   @Patch([
@@ -60,6 +64,10 @@ export class CommentsController {
     @CurrentUser() user: AuthUser,
   ) {
     const targetCommentId = commentId ?? id;
-    return this.commentsService.remove(targetCommentId!, user.id);
+    return this.commentsService.remove(
+      targetCommentId!,
+      user.id,
+      user.systemRole,
+    );
   }
 }

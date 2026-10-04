@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { ProjectRole, ProjectStatus } from "@prisma/client";
+import { ProjectRole, ProjectStatus, SystemRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateTaskDto } from "./dto/create-task.dto";
 import { MoveTaskDto } from "./dto/move-task.dto";
@@ -27,8 +27,15 @@ export class TasksService {
 
     const column = await this.prisma.kanbanColumn.findFirst({
       where: { id: dto.columnId, projectId },
+      include: { project: true },
     });
     if (!column) throw new BadRequestException("Column không thuộc project");
+
+    if (column.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể tạo công việc mới",
+      );
+    }
 
     if (dto.assigneeIds?.length) {
       const memberCount = await this.prisma.projectMember.count({
@@ -93,7 +100,12 @@ export class TasksService {
     });
   }
 
-  async move(taskId: string, actorId: string, dto: MoveTaskDto) {
+  async move(
+    taskId: string,
+    actorId: string,
+    dto: MoveTaskDto,
+    actorRole?: SystemRole,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
       include: { column: true, project: true },
@@ -104,14 +116,16 @@ export class TasksService {
       throw new BadRequestException("Dự án đã lưu trữ, không thể chỉnh sửa");
     }
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: { projectId: task.projectId, userId: actorId },
-      },
-    });
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: { projectId: task.projectId, userId: actorId },
+        },
+      });
 
-    if (!member || member.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException("Bạn không có quyền di chuyển task");
+      if (!member || member.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException("Bạn không có quyền di chuyển task");
+      }
     }
 
     const target = await this.prisma.kanbanColumn.findFirst({
@@ -207,7 +221,7 @@ export class TasksService {
     return task.projectId;
   }
 
-  async getDetail(taskId: string, actorId: string) {
+  async getDetail(taskId: string, actorId: string, actorRole?: SystemRole) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
       include: {
@@ -224,31 +238,47 @@ export class TasksService {
 
     if (!task) throw new NotFoundException("Task không tồn tại");
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: { projectId: task.projectId, userId: actorId },
-      },
-    });
-    if (!member) {
-      throw new ForbiddenException("Bạn không có quyền trong dự án này");
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: { projectId: task.projectId, userId: actorId },
+        },
+      });
+      if (!member) {
+        throw new ForbiddenException("Bạn không có quyền trong dự án này");
+      }
     }
 
     return task;
   }
 
-  async update(taskId: string, actorId: string, dto: UpdateTaskDto) {
+  async update(
+    taskId: string,
+    actorId: string,
+    dto: UpdateTaskDto,
+    actorRole?: SystemRole,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
+      include: { project: true },
     });
     if (!task) throw new NotFoundException("Task không tồn tại");
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: { projectId: task.projectId, userId: actorId },
-      },
-    });
-    if (!member || member.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException("Bạn không có quyền cập nhật task này");
+    if (task.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể chỉnh sửa công việc",
+      );
+    }
+
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: { projectId: task.projectId, userId: actorId },
+        },
+      });
+      if (!member || member.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException("Bạn không có quyền cập nhật task này");
+      }
     }
 
     const effectiveStartDate =
@@ -342,22 +372,32 @@ export class TasksService {
     });
   }
 
-  async remove(taskId: string, actorId: string) {
+  async remove(taskId: string, actorId: string, actorRole?: SystemRole) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
+      include: { project: true },
     });
     if (!task) throw new NotFoundException("Task không tồn tại");
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: { projectId: task.projectId, userId: actorId },
-      },
-    });
-    if (
-      !member ||
-      (member.role !== ProjectRole.OWNER && member.role !== ProjectRole.MANAGER)
-    ) {
-      throw new ForbiddenException("Bạn không có quyền xóa task này");
+    if (task.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể xóa công việc",
+      );
+    }
+
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: { projectId: task.projectId, userId: actorId },
+        },
+      });
+      if (
+        !member ||
+        (member.role !== ProjectRole.OWNER &&
+          member.role !== ProjectRole.MANAGER)
+      ) {
+        throw new ForbiddenException("Bạn không có quyền xóa task này");
+      }
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -380,21 +420,35 @@ export class TasksService {
     });
   }
 
-  async assign(taskId: string, actorId: string, targetUserId: string) {
+  async assign(
+    taskId: string,
+    actorId: string,
+    targetUserId: string,
+    actorRole?: SystemRole,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
+      include: { project: true },
     });
     if (!task) throw new NotFoundException("Task không tồn tại");
 
-    const actorMember = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: { projectId: task.projectId, userId: actorId },
-      },
-    });
-    if (!actorMember || actorMember.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException(
-        "Bạn không có quyền gán thành viên vào task",
+    if (task.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể gán thành viên vào công việc",
       );
+    }
+
+    if (actorRole !== SystemRole.ADMIN) {
+      const actorMember = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: { projectId: task.projectId, userId: actorId },
+        },
+      });
+      if (!actorMember || actorMember.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException(
+          "Bạn không có quyền gán thành viên vào task",
+        );
+      }
     }
 
     const targetMember = await this.prisma.projectMember.findUnique({
@@ -438,21 +492,35 @@ export class TasksService {
     });
   }
 
-  async unassign(taskId: string, actorId: string, targetUserId: string) {
+  async unassign(
+    taskId: string,
+    actorId: string,
+    targetUserId: string,
+    actorRole?: SystemRole,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
+      include: { project: true },
     });
     if (!task) throw new NotFoundException("Task không tồn tại");
 
-    const actorMember = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: { projectId: task.projectId, userId: actorId },
-      },
-    });
-    if (!actorMember || actorMember.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException(
-        "Bạn không có quyền gỡ thành viên khỏi task",
+    if (task.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể gỡ thành viên khỏi công việc",
       );
+    }
+
+    if (actorRole !== SystemRole.ADMIN) {
+      const actorMember = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: { projectId: task.projectId, userId: actorId },
+        },
+      });
+      if (!actorMember || actorMember.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException(
+          "Bạn không có quyền gỡ thành viên khỏi task",
+        );
+      }
     }
 
     const existing = await this.prisma.taskAssignment.findUnique({

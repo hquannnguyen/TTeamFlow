@@ -1,9 +1,10 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { ProjectRole } from "@prisma/client";
+import { ProjectRole, ProjectStatus, SystemRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateChecklistItemDto } from "./dto/create-checklist-item.dto";
 import { UpdateChecklistItemDto } from "./dto/update-checklist-item.dto";
@@ -12,7 +13,7 @@ import { UpdateChecklistItemDto } from "./dto/update-checklist-item.dto";
 export class ChecklistsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(taskId: string, actorId: string) {
+  async findAll(taskId: string, actorId: string, actorRole?: SystemRole) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
     });
@@ -20,16 +21,18 @@ export class ChecklistsService {
       throw new NotFoundException("Task không tồn tại");
     }
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId: task.projectId,
-          userId: actorId,
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: {
+            projectId: task.projectId,
+            userId: actorId,
+          },
         },
-      },
-    });
-    if (!member) {
-      throw new ForbiddenException("Bạn không có quyền trong dự án này");
+      });
+      if (!member) {
+        throw new ForbiddenException("Bạn không có quyền trong dự án này");
+      }
     }
 
     return this.prisma.checklistItem.findMany({
@@ -38,24 +41,38 @@ export class ChecklistsService {
     });
   }
 
-  async create(taskId: string, actorId: string, data: CreateChecklistItemDto) {
+  async create(
+    taskId: string,
+    actorId: string,
+    data: CreateChecklistItemDto,
+    actorRole?: SystemRole,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
+      include: { project: true },
     });
     if (!task) {
       throw new NotFoundException("Task không tồn tại");
     }
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId: task.projectId,
-          userId: actorId,
+    if (task.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể thêm nhiệm vụ phụ",
+      );
+    }
+
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: {
+            projectId: task.projectId,
+            userId: actorId,
+          },
         },
-      },
-    });
-    if (!member || member.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException("Bạn không có quyền thêm checklist");
+      });
+      if (!member || member.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException("Bạn không có quyền thêm checklist");
+      }
     }
 
     const max = await this.prisma.checklistItem.aggregate({
@@ -73,25 +90,38 @@ export class ChecklistsService {
     });
   }
 
-  async update(id: string, actorId: string, data: UpdateChecklistItemDto) {
+  async update(
+    id: string,
+    actorId: string,
+    data: UpdateChecklistItemDto,
+    actorRole?: SystemRole,
+  ) {
     const item = await this.prisma.checklistItem.findUnique({
       where: { id },
-      include: { task: true },
+      include: { task: { include: { project: true } } },
     });
     if (!item || item.task.deletedAt !== null) {
       throw new NotFoundException("Checklist item không tồn tại");
     }
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId: item.task.projectId,
-          userId: actorId,
+    if (item.task.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể cập nhật nhiệm vụ phụ",
+      );
+    }
+
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: {
+            projectId: item.task.projectId,
+            userId: actorId,
+          },
         },
-      },
-    });
-    if (!member || member.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException("Bạn không có quyền cập nhật checklist");
+      });
+      if (!member || member.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException("Bạn không có quyền cập nhật checklist");
+      }
     }
 
     return this.prisma.checklistItem.update({
@@ -103,25 +133,33 @@ export class ChecklistsService {
     });
   }
 
-  async remove(id: string, actorId: string) {
+  async remove(id: string, actorId: string, actorRole?: SystemRole) {
     const item = await this.prisma.checklistItem.findUnique({
       where: { id },
-      include: { task: true },
+      include: { task: { include: { project: true } } },
     });
     if (!item || item.task.deletedAt !== null) {
       throw new NotFoundException("Checklist item không tồn tại");
     }
 
-    const member = await this.prisma.projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId: item.task.projectId,
-          userId: actorId,
+    if (item.task.project.status === ProjectStatus.ARCHIVED) {
+      throw new BadRequestException(
+        "Dự án đã lưu trữ, không thể xóa nhiệm vụ phụ",
+      );
+    }
+
+    if (actorRole !== SystemRole.ADMIN) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: {
+          projectId_userId: {
+            projectId: item.task.projectId,
+            userId: actorId,
+          },
         },
-      },
-    });
-    if (!member || member.role === ProjectRole.VIEWER) {
-      throw new ForbiddenException("Bạn không có quyền xóa checklist");
+      });
+      if (!member || member.role === ProjectRole.VIEWER) {
+        throw new ForbiddenException("Bạn không có quyền xóa checklist");
+      }
     }
 
     return this.prisma.checklistItem.delete({

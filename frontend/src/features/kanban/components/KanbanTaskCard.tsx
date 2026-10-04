@@ -7,6 +7,7 @@ interface KanbanTaskCardProps {
   projectKey?: string;
   isCompletedColumn?: boolean;
   isArchived?: boolean;
+  canDelete?: boolean;
   onClick?: () => void;
   onDeleteTask?: (taskId: string) => void;
   onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
@@ -59,6 +60,7 @@ export function KanbanTaskCard({
   projectKey = 'TTF',
   isCompletedColumn = false,
   isArchived = false,
+  canDelete = true,
   onClick,
   onDeleteTask,
   onDragStart,
@@ -111,7 +113,7 @@ export function KanbanTaskCard({
         </span>
 
         {/* Three dots menu button */}
-        {!isArchived && (
+        {!isArchived && canDelete && (
           <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
