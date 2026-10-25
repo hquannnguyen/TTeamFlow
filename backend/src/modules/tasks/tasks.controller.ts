@@ -43,7 +43,7 @@ export class TasksController {
 
   @Get("tasks/:taskId")
   getDetail(@Param("taskId") taskId: string, @CurrentUser() user: AuthUser) {
-    return this.service.getDetail(taskId, user.id);
+    return this.service.getDetail(taskId, user.id, user.systemRole);
   }
 
   @Patch("tasks/:taskId")
@@ -52,12 +52,12 @@ export class TasksController {
     @CurrentUser() user: AuthUser,
     @Body() dto: UpdateTaskDto,
   ) {
-    return this.service.update(taskId, user.id, dto);
+    return this.service.update(taskId, user.id, dto, user.systemRole);
   }
 
   @Delete("tasks/:taskId")
   remove(@Param("taskId") taskId: string, @CurrentUser() user: AuthUser) {
-    return this.service.remove(taskId, user.id);
+    return this.service.remove(taskId, user.id, user.systemRole);
   }
 
   @Post("tasks/:taskId/assignees/:userId")
@@ -66,7 +66,7 @@ export class TasksController {
     @Param("userId") targetUserId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.assign(taskId, user.id, targetUserId);
+    return this.service.assign(taskId, user.id, targetUserId, user.systemRole);
   }
 
   @Delete("tasks/:taskId/assignees/:userId")
@@ -75,6 +75,11 @@ export class TasksController {
     @Param("userId") targetUserId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.service.unassign(taskId, user.id, targetUserId);
+    return this.service.unassign(
+      taskId,
+      user.id,
+      targetUserId,
+      user.systemRole,
+    );
   }
 }
