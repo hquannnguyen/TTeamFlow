@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { login } from '../api/auth.api';
 import { useAuthStore } from '../store/auth.store';
-import { AuthCard } from '../components/AuthCard';
 import { toast, getBackendErrorMessage } from '../../../components/ui/toast.store';
 
 // ── Validation schema ─────────────────────────────────────────────────────────
@@ -45,7 +44,7 @@ function EyeOffIcon() {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function LoginPage() {
+export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as { successMessage?: string; email?: string } | null;
@@ -82,16 +81,15 @@ export function LoginPage() {
   }
 
   return (
-    <AuthCard
-      heading="Chào mừng trở lại"
-      subheading="Đăng nhập để tiếp tục với TTeamFlow"
-    >
+    <>
+      <h1 className="auth-heading">Đăng nhập</h1>
+      <p className="auth-sub">Chào mừng trở lại! Đăng nhập để tiếp tục với TTeamFlow</p>
       <form className="form-stack" onSubmit={handleSubmit(onSubmit)} noValidate>
 
         {/* Success banner (e.g. after changing password) */}
         {successBanner && (
           <div className="form-success-banner" role="status">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="u-icon-top">
               <polyline points="20 6 9 17 4 12" />
             </svg>
             <span>{successBanner}</span>
@@ -101,7 +99,7 @@ export function LoginPage() {
         {/* Server error banner */}
         {serverError && (
           <div className="form-error-banner" role="alert">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="u-icon-top">
               <circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>
             </svg>
             {serverError}
@@ -112,13 +110,14 @@ export function LoginPage() {
         <div className="form-field">
           <label className="form-label" htmlFor="login-email">Email</label>
           <div className="input-wrapper">
+            <span className="input-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="m22 7-10 6L2 7"/></svg></span>
             <input
               id="login-email"
               type="email"
               autoComplete="email"
               autoFocus
               placeholder="you@company.com"
-              className={`form-input${errors.email ? ' error' : ''}`}
+              className={`form-input has-icon${errors.email ? ' error' : ''}`}
               {...register('email')}
             />
           </div>
@@ -131,12 +130,13 @@ export function LoginPage() {
         <div className="form-field">
           <label className="form-label" htmlFor="login-password">Mật khẩu</label>
           <div className="input-wrapper">
+            <span className="input-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
             <input
               id="login-password"
               type={showPwd ? 'text' : 'password'}
               autoComplete="current-password"
               placeholder="••••••••"
-              className={`form-input has-suffix${errors.password ? ' error' : ''}`}
+              className={`form-input has-icon has-suffix${errors.password ? ' error' : ''}`}
               {...register('password')}
             />
             <button
@@ -166,10 +166,10 @@ export function LoginPage() {
         </button>
       </form>
 
-      <p className="auth-footer">
+      <p className="auth-footer auth-footer--mobile">
         Chưa có tài khoản?{' '}
-        <Link to="/register">Đăng ký ngay</Link>
+        <a href="/register" onClick={(e) => { e.preventDefault(); onSwitch(); }}>Đăng ký ngay</a>
       </p>
-    </AuthCard>
+    </>
   );
 }
