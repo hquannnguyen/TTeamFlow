@@ -32,7 +32,7 @@ export function DashboardHero({ projectName, metrics, onOpenBoard }: DashboardHe
   const pct = useCountUp(Math.min(100, Math.max(0, metrics.progress)));
   const total = useCountUp(metrics.totalTasks);
   const done = useCountUp(metrics.completedTasks);
-  const active = useCountUp(metrics.activeTasks ?? Math.max(0, metrics.totalTasks - metrics.completedTasks));
+  const active = useCountUp(metrics.activeTasks ?? 0);
   const overdue = useCountUp(metrics.overdueTasks);
   const offset = CIRC - (pct / 100) * CIRC;
 

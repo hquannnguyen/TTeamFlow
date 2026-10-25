@@ -19,7 +19,6 @@ export async function getDashboardMetrics(projectId: string): Promise<DashboardM
 
   const total = data.totalTasks ?? 0;
   const completed = data.completedTasks ?? 0;
-  const active = Math.max(0, total - completed);
 
   return {
     ...data,
@@ -27,7 +26,7 @@ export async function getDashboardMetrics(projectId: string): Promise<DashboardM
     completedTasks: completed,
     overdueTasks: data.overdueTasks ?? 0,
     progress: data.progress ?? 0,
-    activeTasks: active,
+    activeTasks: data.activeTasks ?? 0,
     statusDistribution: (data.statusDistribution || []).map((col, idx) => ({
       ...col,
       percentage: total > 0 ? Math.round((col.count / total) * 100) : 0,
@@ -43,7 +42,7 @@ export async function getDashboardMetrics(projectId: string): Promise<DashboardM
     memberWorkload: (data.memberWorkload || []).map((m) => ({
       ...m,
       activeTaskCount: m.activeTaskCount ?? 0,
-      isOverloaded: (m.activeTaskCount ?? 0) >= 8,
+      isOverloaded: m.isOverloaded ?? false,
     })),
   };
 }

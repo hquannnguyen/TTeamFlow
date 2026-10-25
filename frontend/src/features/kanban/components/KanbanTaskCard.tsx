@@ -84,7 +84,7 @@ export function KanbanTaskCard({
   const dueSoon = !isDone && !overdue && left !== null && left <= 2;
 
   // Key representation like Stitch: TTF-104
-  const taskCode = `${projectKey}-${task.taskNumber || (task.position > 0 ? Math.floor(task.position / 100) : 1)}`;
+  const taskCode = task.taskNumber ? `${projectKey}-${task.taskNumber}` : projectKey;
 
   // First assignee
   const firstAssignee = task.assignments && task.assignments.length > 0 ? task.assignments[0].user : null;

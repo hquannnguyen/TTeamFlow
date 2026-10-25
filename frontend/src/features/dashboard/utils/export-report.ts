@@ -30,7 +30,7 @@ export function exportDashboardCsv(projectName: string, metrics: DashboardMetric
     row('TỔNG QUAN'),
     row('Tổng nhiệm vụ', metrics.totalTasks),
     row('Đã hoàn thành', metrics.completedTasks),
-    row('Đang thực hiện', metrics.activeTasks ?? Math.max(0, metrics.totalTasks - metrics.completedTasks)),
+    row('Đang thực hiện', metrics.activeTasks ?? 0),
     row('Quá hạn', metrics.overdueTasks),
     row('Tiến độ (%)', metrics.progress),
     '',

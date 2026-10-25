@@ -172,7 +172,7 @@ export function KanbanListView({
                         const priorityInfo = getPriorityBadge(task.priority);
                         const formattedDueDate = formatDate(task.dueDate);
                         const late = isOverdue(task.dueDate, column.isCompleted || Boolean(task.completedAt));
-                        const taskCode = `${projectKey}-${task.taskNumber || task.position || '1'}`;
+                        const taskCode = task.taskNumber ? `${projectKey}-${task.taskNumber}` : projectKey;
                         const checklistCount = task._count?.checklistItems || 0;
                         const commentsCount = task._count?.comments || 0;
 

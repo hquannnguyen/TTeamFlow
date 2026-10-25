@@ -10367,3 +10367,65 @@ a { color: inherit; }
 .task-detail-page-wrapper .task-detail-scroll-body { padding: 0 0 24px; }
 .task-detail-breadcrumb { min-width: 0; flex-wrap: nowrap; }
 .task-detail-breadcrumb .btn-back-kanban { flex-shrink: 0; background: var(--white); box-shadow: var(--shadow-card); }
+
+/* Dark mode: huy hiệu/nhãn màu — nền trong mờ, chữ sáng */
+[data-theme="dark"] .tone-blue    { background: rgb(59 130 246 / .16);  color: #93C5FD; border-color: rgb(59 130 246 / .35); }
+[data-theme="dark"] .tone-emerald { background: rgb(16 185 129 / .16);  color: #6EE7B7; border-color: rgb(16 185 129 / .35); }
+[data-theme="dark"] .tone-amber   { background: rgb(245 158 11 / .16);  color: #FCD34D; border-color: rgb(245 158 11 / .35); }
+[data-theme="dark"] .tone-indigo  { background: rgb(99 102 241 / .2);   color: #C7D2FE; border-color: rgb(99 102 241 / .4); }
+[data-theme="dark"] .tone-purple  { background: rgb(139 92 246 / .18);  color: #DDD6FE; border-color: rgb(139 92 246 / .38); }
+[data-theme="dark"] .tone-teal    { background: rgb(20 184 166 / .16);  color: #5EEAD4; border-color: rgb(20 184 166 / .35); }
+[data-theme="dark"] .tone-red     { background: rgb(244 63 94 / .16);   color: #FDA4AF; border-color: rgb(244 63 94 / .35); }
+[data-theme="dark"] .tone-slate   { background: rgb(148 163 184 / .14); color: var(--slate-600); border-color: var(--slate-300); }
+[data-theme="dark"] .status-pill.status-active { background: rgb(16 185 129 / .16); color: #6EE7B7; }
+[data-theme="dark"] .project-members-badge { color: #A5B4FC; }
+[data-theme="dark"] .member-role-badge.role-owner   { background: rgb(245 158 11 / .16);  color: #FCD34D; }
+[data-theme="dark"] .member-role-badge.role-manager { background: rgb(139 92 246 / .18);  color: #DDD6FE; }
+[data-theme="dark"] .member-role-badge.role-member  { background: rgb(59 130 246 / .16);  color: #93C5FD; }
+[data-theme="dark"] .member-role-badge.role-viewer  { background: rgb(148 163 184 / .14); color: var(--slate-600); }
+
+/* Mobile: hiện logo phía trên thẻ đăng nhập (overlay có logo bị ẩn) và thống kê thành viên 2 cột */
+.auth-mobile-logo { display: none; }
+@media (max-width: 760px) {
+  .auth-stage { flex-direction: column; justify-content: flex-start; gap: 18px; display: flex; align-items: center; }
+  .auth-mobile-logo { display: block; height: 52px; width: auto; margin-top: 8px; }
+  .auth-card2 { width: 100%; }
+  [data-theme="dark"] .auth-mobile-logo { background: rgb(255 255 255 / .92); padding: 6px 12px; border-radius: 12px; height: 62px; }
+}
+@media (max-width: 640px) {
+  .members-stats-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .members-stats-row .member-stat-card:first-child { grid-column: 1 / -1; }
+}
+
+/* Đăng nhập: công tắc sáng/tối */
+.auth-theme-toggle {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--slate-500);
+  background: var(--nm-bg, var(--white));
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 6px 6px 14px var(--nm-dark), -5px -5px 12px var(--nm-light);
+  transition: transform .2s var(--ease-out), color .2s;
+}
+.auth-theme-toggle:hover { color: var(--indigo-600); transform: translateY(-2px); }
+.auth-stage .auth-theme-toggle { --nm-dark: rgb(150 160 198 / .55); --nm-light: rgb(255 255 255 / .95); }
+[data-theme="dark"] .auth-stage .auth-theme-toggle { --nm-dark: rgb(0 0 0 / .55); --nm-light: rgb(255 255 255 / .05); }
+
+/* Kanban dạng danh sách: nhóm cột gọn, hàng có hover */
+.kanban-list-group { border: 1px solid var(--hairline); border-radius: 16px; box-shadow: var(--shadow-card); overflow: hidden; }
+.kanban-list-group-header { background: linear-gradient(180deg, var(--slate-50), transparent); }
+.kanban-list-group-name { font-family: 'Montserrat', 'Inter', sans-serif; font-weight: 700; letter-spacing: -.2px; color: var(--ink); }
+.kanban-list-table th { letter-spacing: .8px; color: var(--slate-500); }
+.kanban-list-row { transition: background .2s, box-shadow .2s; }
+.kanban-list-row:hover { background: var(--indigo-50); box-shadow: inset 3px 0 0 var(--indigo-500); }
+.kanban-list-task-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--indigo-700); background: var(--indigo-50); border-radius: 6px; }
+.kanban-list-add-task-btn { border-radius: 999px; }
+.kanban-list-empty-container { border: 1.5px dashed var(--slate-300); border-radius: 16px; background: transparent; }
