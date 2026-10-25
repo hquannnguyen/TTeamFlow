@@ -49,10 +49,19 @@ export class KanbanService {
             _count: {
               select: { checklistItems: true, comments: true },
             },
+            checklistItems: { where: { isCompleted: true }, select: { id: true } },
           },
         },
       },
-    });
+    }).then((columns) =>
+      columns.map((col) => ({
+        ...col,
+        tasks: col.tasks.map(({ checklistItems, ...task }) => ({
+          ...task,
+          checklistDone: checklistItems.length,
+        })),
+      })),
+    );
   }
 
   async createColumn(projectId: string, actorId: string, dto: CreateColumnDto) {
