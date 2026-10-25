@@ -8,10 +8,15 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Public } from "../../common/decorators/public.decorator";
+import {
+  RateLimit,
+  RateLimitGuard,
+} from "../../common/guards/rate-limit.guard";
 import type { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { AuthService } from "./auth.service";
 import { ChangePasswordDto } from "./dto/change-password.dto";
@@ -23,6 +28,8 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 10, windowMs: 60 * 60 * 1000 })
   @Post("register")
   @HttpCode(201)
   register(@Body() dto: RegisterDto) {
@@ -30,6 +37,8 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 10, windowMs: 15 * 60 * 1000 })
   @Post("login")
   async login(
     @Body() dto: LoginDto,

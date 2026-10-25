@@ -13,6 +13,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
 
+  // Backend đứng sau Nginx: lấy IP thật từ X-Forwarded-For (dùng cho giới hạn đăng nhập)
+  app.set("trust proxy", 1);
+
   app.useStaticAssets(path.join(process.cwd(), "uploads"), {
     prefix: "/uploads/",
   });
