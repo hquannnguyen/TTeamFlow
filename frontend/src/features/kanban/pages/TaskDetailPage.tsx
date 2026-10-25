@@ -634,10 +634,23 @@ export function TaskDetailPage() {
                     return (
                       <div className="assignee-chip" key={u.id} title={u.fullName}>
                         {avatar ? (
-                          <img src={avatar} alt={u.fullName} className="assignee-chip-avatar" />
-                        ) : (
-                          <div className="assignee-chip-avatar">{getInitials(u.fullName)}</div>
-                        )}
+                          <img
+                            src={avatar}
+                            alt={u.fullName}
+                            className="assignee-chip-avatar"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                              if (fb) fb.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className="assignee-chip-avatar"
+                          style={{ display: avatar ? 'none' : 'flex' }}
+                        >
+                          {getInitials(u.fullName)}
+                        </div>
                         <span className="assignee-chip-name">{u.fullName}</span>
                         {!isArchived && (
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '4px' }}>
@@ -989,12 +1002,19 @@ export function TaskDetailPage() {
                                       src={avatar}
                                       alt={m.user.fullName}
                                       className="mention-avatar-sm"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                        if (fb) fb.style.display = 'flex';
+                                      }}
                                     />
-                                  ) : (
-                                    <div className="mention-avatar-sm">
-                                      {getInitials(m.user.fullName)}
-                                    </div>
-                                  )}
+                                  ) : null}
+                                  <div
+                                    className="mention-avatar-sm"
+                                    style={{ display: avatar ? 'none' : 'flex' }}
+                                  >
+                                    {getInitials(m.user.fullName)}
+                                  </div>
                                   <span>{m.user.fullName}</span>
                                 </button>
                               );
@@ -1071,10 +1091,23 @@ export function TaskDetailPage() {
                     return (
                       <div key={c.id} className="comment-item">
                         {authorAvatar ? (
-                          <img src={authorAvatar} alt={authorName} className="comment-avatar" />
-                        ) : (
-                          <div className="comment-avatar">{getInitials(authorName)}</div>
-                        )}
+                          <img
+                            src={authorAvatar}
+                            alt={authorName}
+                            className="comment-avatar"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                              if (fb) fb.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className="comment-avatar"
+                          style={{ display: authorAvatar ? 'none' : 'flex' }}
+                        >
+                          {getInitials(authorName)}
+                        </div>
 
                         <div className="comment-body">
                           <div className="comment-meta">

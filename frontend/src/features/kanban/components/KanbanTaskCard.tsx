@@ -225,12 +225,26 @@ export function KanbanTaskCard({
           {/* Assignee Avatar */}
           {firstAssignee ? (
             avatarUrl ? (
-              <img
-                src={avatarUrl}
-                alt={firstAssignee.fullName}
-                className="stitch-card-assignee-avatar"
-                title={firstAssignee.fullName}
-              />
+              <>
+                <img
+                  src={avatarUrl}
+                  alt={firstAssignee.fullName}
+                  className="stitch-card-assignee-avatar"
+                  title={firstAssignee.fullName}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                    if (fb) fb.style.display = 'flex';
+                  }}
+                />
+                <div
+                  className="stitch-card-assignee-avatar"
+                  title={firstAssignee.fullName}
+                  style={{ display: 'none' }}
+                >
+                  {getInitials(firstAssignee.fullName)}
+                </div>
+              </>
             ) : (
               <div
                 className="stitch-card-assignee-avatar"

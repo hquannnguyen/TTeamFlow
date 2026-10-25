@@ -464,21 +464,28 @@ export function ProjectBoardPage() {
               {project?.members && project.members.length > 0 ? (
                 project.members.slice(0, 3).map((m) => {
                   const avatar = getMediaUrl(m.user.avatarUrl);
-                  return avatar ? (
-                    <img
-                      key={m.user.id}
-                      src={avatar}
-                      alt={m.user.fullName}
-                      className="kanban-avatar-item"
-                      title={m.user.fullName}
-                    />
-                  ) : (
-                    <div
-                      key={m.user.id}
-                      className="kanban-avatar-item"
-                      title={m.user.fullName}
-                    >
-                      {m.user.fullName.charAt(0).toUpperCase()}
+                  return (
+                    <div key={m.user.id} style={{ display: 'inline-flex' }}>
+                      {avatar ? (
+                        <img
+                          src={avatar}
+                          alt={m.user.fullName}
+                          className="kanban-avatar-item"
+                          title={m.user.fullName}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                            if (fb) fb.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className="kanban-avatar-item"
+                        title={m.user.fullName}
+                        style={{ display: avatar ? 'none' : 'flex' }}
+                      >
+                        {m.user.fullName.charAt(0).toUpperCase()}
+                      </div>
                     </div>
                   );
                 })
