@@ -14,21 +14,35 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
+    const isCorsError =
+      (exception as { message?: string })?.message === "Not allowed by CORS";
+
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+        : isCorsError
+          ? HttpStatus.FORBIDDEN
+          : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const raw =
       exception instanceof HttpException
         ? exception.getResponse()
-        : "Internal server error";
+        : isCorsError
+          ? "Not allowed by CORS"
+          : "Internal server error";
 
     const message =
       typeof raw === "string"
         ? raw
         : ((raw as { message?: string | string[] }).message ??
           "Internal server error");
+
+    if (!(exception instanceof HttpException)) {
+      console.error(
+        `[Unhandled Exception ${status}] ${request.method} ${request.url}:`,
+        exception,
+      );
+    }
 
     response.status(status).json({
       success: false,

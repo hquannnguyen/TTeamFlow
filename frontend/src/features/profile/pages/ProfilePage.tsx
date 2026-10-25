@@ -84,6 +84,11 @@ export function ProfilePage() {
   const [loadError, setLoadError] = useState('');
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [profile?.avatarUrl]);
 
   // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -207,11 +212,12 @@ export function ProfilePage() {
           {/* ── Left: Avatar card ─────────────────────────────────────── */}
           <div className="profile-card profile-avatar-card">
             <div className="avatar-upload-ring" onClick={() => fileInputRef.current?.click()}>
-              {getMediaUrl(profile?.avatarUrl) ? (
+              {!avatarError && getMediaUrl(profile?.avatarUrl) ? (
                 <img
                   src={getMediaUrl(profile?.avatarUrl)!}
                   alt={displayName}
                   className="avatar-img"
+                  onError={() => setAvatarError(true)}
                 />
               ) : (
                 <div className="avatar-initials">{initials}</div>

@@ -100,10 +100,23 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({ item, onClic
     >
       <div className="notif-avatar-wrap">
         {actorAvatar ? (
-          <img src={actorAvatar} alt={actorName} className="notif-avatar-img" />
-        ) : (
-          <div className="notif-avatar-fallback">{getInitials(actorName)}</div>
-        )}
+          <img
+            src={actorAvatar}
+            alt={actorName}
+            className="notif-avatar-img"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+              if (fb) fb.style.display = 'flex';
+            }}
+          />
+        ) : null}
+        <div
+          className="notif-avatar-fallback"
+          style={{ display: actorAvatar ? 'none' : 'flex' }}
+        >
+          {getInitials(actorName)}
+        </div>
         {getTypeIcon(item.type)}
       </div>
 

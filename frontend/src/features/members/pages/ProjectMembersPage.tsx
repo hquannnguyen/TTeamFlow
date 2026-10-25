@@ -558,10 +558,19 @@ export function ProjectMembersPage() {
 
                   <div className="member-card-avatar">
                     {avatar ? (
-                      <img src={avatar} alt={displayName} />
-                    ) : (
-                      <span>{displayName.charAt(0).toUpperCase()}</span>
-                    )}
+                      <img
+                        src={avatar}
+                        alt={displayName}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                          if (fb) fb.style.display = 'inline-block';
+                        }}
+                      />
+                    ) : null}
+                    <span style={{ display: avatar ? 'none' : 'inline-block' }}>
+                      {displayName.charAt(0).toUpperCase()}
+                    </span>
                   </div>
 
                   <h3 className="member-card-name">
@@ -621,12 +630,19 @@ export function ProjectMembersPage() {
                               src={avatar}
                               alt={displayName}
                               className="member-avatar-img"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                if (fb) fb.style.display = 'flex';
+                              }}
                             />
-                          ) : (
-                            <div className="member-avatar-img initials">
-                              {displayName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
+                          ) : null}
+                          <div
+                            className="member-avatar-img initials"
+                            style={{ display: avatar ? 'none' : 'flex' }}
+                          >
+                            {displayName.charAt(0).toUpperCase()}
+                          </div>
                         </div>
                         <div className="member-user-details">
                           <div className="member-name-row">

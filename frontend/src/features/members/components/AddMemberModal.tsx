@@ -235,12 +235,19 @@ export function AddMemberModal({
                         src={getMediaUrl(selectedCandidate.avatarUrl)!}
                         alt={selectedCandidate.fullName}
                         className="candidate-avatar-img"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                          if (fb) fb.style.display = 'flex';
+                        }}
                       />
-                    ) : (
-                      <div className="candidate-avatar-initials">
-                        {getInitials(selectedCandidate.fullName)}
-                      </div>
-                    )}
+                    ) : null}
+                    <div
+                      className="candidate-avatar-initials"
+                      style={{ display: getMediaUrl(selectedCandidate.avatarUrl) ? 'none' : 'flex' }}
+                    >
+                      {getInitials(selectedCandidate.fullName)}
+                    </div>
                   </div>
                   <div className="candidate-card-info">
                     <div className="candidate-card-name">{selectedCandidate.fullName}</div>
@@ -299,10 +306,17 @@ export function AddMemberModal({
                             >
                               <div className="candidate-item-avatar">
                                 {avatar ? (
-                                  <img src={avatar} alt={c.fullName} />
-                                ) : (
-                                  <div>{getInitials(c.fullName)}</div>
-                                )}
+                                  <img
+                                    src={avatar}
+                                    alt={c.fullName}
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                      if (fb) fb.style.display = 'block';
+                                    }}
+                                  />
+                                ) : null}
+                                <div style={{ display: avatar ? 'none' : 'block' }}>{getInitials(c.fullName)}</div>
                               </div>
                               <div className="candidate-item-details">
                                 <span className="candidate-item-name">{c.fullName}</span>

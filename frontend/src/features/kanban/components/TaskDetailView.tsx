@@ -332,7 +332,21 @@ export function TaskDetailView({
                   <div className="task-assignee-select-wrap">
                     {currentAssignee ? (
                       avatarUrl ? (
-                        <img src={avatarUrl} alt={currentAssignee.fullName} className="assignee-avatar-sm" />
+                        <>
+                          <img
+                            src={avatarUrl}
+                            alt={currentAssignee.fullName}
+                            className="assignee-avatar-sm"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                              if (fb) fb.style.display = 'flex';
+                            }}
+                          />
+                          <div className="assignee-avatar-sm" style={{ display: 'none' }}>
+                            {getInitials(currentAssignee.fullName)}
+                          </div>
+                        </>
                       ) : (
                         <div className="assignee-avatar-sm">{getInitials(currentAssignee.fullName)}</div>
                       )
@@ -574,10 +588,23 @@ export function TaskDetailView({
                         return (
                           <div key={c.id} className="comment-item">
                             {authorAvatar ? (
-                              <img src={authorAvatar} alt={authorName} className="comment-avatar" />
-                            ) : (
-                              <div className="comment-avatar">{getInitials(authorName)}</div>
-                            )}
+                              <img
+                                src={authorAvatar}
+                                alt={authorName}
+                                className="comment-avatar"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                  if (fb) fb.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="comment-avatar"
+                              style={{ display: authorAvatar ? 'none' : 'flex' }}
+                            >
+                              {getInitials(authorName)}
+                            </div>
 
                             <div className="comment-body">
                               <div className="comment-meta">

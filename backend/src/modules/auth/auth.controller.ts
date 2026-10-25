@@ -23,6 +23,22 @@ import { ChangePasswordDto } from "./dto/change-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 
+const getRefreshTokenCookieOptions = () => {
+  const isSecure =
+    process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === "true"
+      : process.env.NODE_ENV === "production" &&
+        (process.env.FRONTEND_ORIGIN?.startsWith("https://") ?? false);
+
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isSecure,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/api/v1/auth",
+  };
+};
+
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -46,13 +62,11 @@ export class AuthController {
   ) {
     const result = await this.authService.login(dto);
 
-    response.cookie("refresh_token", result.refreshToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/api/v1/auth",
-    });
+    response.cookie(
+      "refresh_token",
+      result.refreshToken,
+      getRefreshTokenCookieOptions(),
+    );
 
     const { refreshToken: _hidden, ...publicResult } = result;
     void _hidden;
@@ -70,13 +84,11 @@ export class AuthController {
 
     const result = await this.authService.refresh(refreshToken);
 
-    response.cookie("refresh_token", result.refreshToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/api/v1/auth",
-    });
+    response.cookie(
+      "refresh_token",
+      result.refreshToken,
+      getRefreshTokenCookieOptions(),
+    );
 
     return { accessToken: result.accessToken };
   }

@@ -77,10 +77,19 @@ export function RemoveMemberModal({
                 src={avatarUrl}
                 alt={displayName}
                 className="remove-member-avatar"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                  if (fb) fb.style.display = 'flex';
+                }}
               />
-            ) : (
-              <div className="remove-member-avatar initials">{initial}</div>
-            )}
+            ) : null}
+            <div
+              className="remove-member-avatar initials"
+              style={{ display: avatarUrl ? 'none' : 'flex' }}
+            >
+              {initial}
+            </div>
             <div className="remove-member-info">
               <div className="remove-member-name">{displayName}</div>
               <div className="remove-member-email">{displayEmail}</div>

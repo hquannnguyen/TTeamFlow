@@ -63,6 +63,11 @@ export function AppLayout() {
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
   const avatarUrl = getMediaUrl(user?.avatarUrl);
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [user?.avatarUrl]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -330,11 +335,12 @@ export function AppLayout() {
                 title={user?.fullName || 'Tài khoản cá nhân'}
               >
                 <div className="top-user-avatar-wrap">
-                  {avatarUrl ? (
+                  {avatarUrl && !avatarError ? (
                     <img
                       src={avatarUrl}
                       alt={user?.fullName || 'Avatar'}
                       className="top-user-avatar"
+                      onError={() => setAvatarError(true)}
                     />
                   ) : (
                     <div className="top-user-avatar top-user-avatar-initials">

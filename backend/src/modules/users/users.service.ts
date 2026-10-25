@@ -57,6 +57,18 @@ export class UsersService {
     });
 
     if (!user) throw new NotFoundException("Không tìm thấy người dùng");
+
+    if (user.avatarUrl?.startsWith("/uploads/avatars/")) {
+      const diskPath = path.join(process.cwd(), user.avatarUrl);
+      if (!fs.existsSync(diskPath)) {
+        await this.prisma.user.update({
+          where: { id: userId },
+          data: { avatarUrl: null },
+        });
+        user.avatarUrl = null;
+      }
+    }
+
     return user;
   }
 

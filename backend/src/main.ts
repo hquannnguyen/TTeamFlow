@@ -32,24 +32,59 @@ async function bootstrap() {
     }),
   );
   app.use(cookieParser());
-  const allowedOrigins = [
-    config.get<string>("FRONTEND_ORIGIN") ?? "http://localhost:5173",
+
+  const configuredOrigins = [
+    config.get<string>("FRONTEND_ORIGIN"),
+    config.get<string>("ALLOWED_ORIGINS"),
+  ]
+    .filter((val): val is string => Boolean(val))
+    .flatMap((val) => val.split(","))
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const defaultOrigins = [
+    "http://localhost",
+    "http://localhost:80",
     "http://localhost:5173",
-    "http://127.0.0.1:5173",
     "http://localhost:3000",
+    "http://127.0.0.1",
+    "http://127.0.0.1:80",
+    "http://127.0.0.1:5173",
     "http://127.0.0.1:3000",
   ];
 
+  const allowedOriginsSet = new Set<string>(defaultOrigins);
+  for (const origin of configuredOrigins) {
+    const cleaned = origin.replace(/\/+$/, "");
+    allowedOriginsSet.add(cleaned);
+    if (cleaned.startsWith("http://")) {
+      if (cleaned.endsWith(":80")) {
+        allowedOriginsSet.add(cleaned.slice(0, -3));
+      } else if (!/:\d+$/.test(cleaned)) {
+        allowedOriginsSet.add(`${cleaned}:80`);
+      }
+    } else if (cleaned.startsWith("https://")) {
+      if (cleaned.endsWith(":443")) {
+        allowedOriginsSet.add(cleaned.slice(0, -4));
+      } else if (!/:\d+$/.test(cleaned)) {
+        allowedOriginsSet.add(`${cleaned}:443`);
+      }
+    }
+  }
+
+  const allowedOrigins = Array.from(allowedOriginsSet);
+
   app.enableCors({
     origin: (origin, callback) => {
+      const normalizedOrigin = origin ? origin.replace(/\/+$/, "") : "";
       if (
         !origin ||
-        allowedOrigins.includes(origin) ||
+        allowedOrigins.includes(normalizedOrigin) ||
         process.env.NODE_ENV !== "production"
       ) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS"));
+        callback(null, false);
       }
     },
     credentials: true,
