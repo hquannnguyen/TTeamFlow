@@ -524,10 +524,8 @@ export function TaskDetailPage() {
             className="btn-back-kanban"
             onClick={() => navigate(effectiveProjectId ? `/projects/${effectiveProjectId}/board` : '/board')}
           >
-            ← Bảng Kanban
+            ← Quay lại bảng Kanban{project?.name ? ` · ${project.name}` : ''}
           </button>
-          <span style={{ color: 'var(--slate-400)' }}>Nhiệm vụ / </span>
-          <span style={{ color: 'var(--slate-900)', fontWeight: 600 }}>{task?.title || 'Chi tiết nhiệm vụ'}</span>
         </div>
       </div>
 

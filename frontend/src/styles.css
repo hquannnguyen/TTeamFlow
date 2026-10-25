@@ -10293,3 +10293,77 @@ a { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .task-detail-meta-card, .comment-item { animation: none; }
 }
+
+/* ══ Hồ sơ cá nhân & Quản trị — hoàn thiện ════════════════════════════════════ */
+
+/* Hồ sơ: thẻ avatar có ảnh bìa gradient */
+.profile-card { border: 1px solid var(--hairline); border-radius: 20px; box-shadow: var(--shadow-card); animation: cardIn .45s var(--ease-out) both; }
+.profile-layout > .profile-card:nth-child(2) { animation-delay: .08s; }
+.profile-avatar-card { position: relative; overflow: hidden; padding-top: 0; }
+.profile-avatar-card::before {
+  content: '';
+  align-self: stretch;
+  height: 96px;
+  margin: 0 -24px;
+  background:
+    radial-gradient(rgb(255 255 255 / .3) 1px, transparent 1px) 0 0 / 14px 14px,
+    linear-gradient(120deg, #0B1250 0%, #1D2A9E 50%, #4F46E5 100%);
+}
+.avatar-upload-ring {
+  margin-top: -48px;
+  border: 4px solid var(--white);
+  box-shadow: 0 0 0 2px var(--indigo-500), 0 14px 24px -10px rgb(79 70 229 / .7);
+}
+.avatar-upload-ring:hover { box-shadow: 0 0 0 3px var(--indigo-500), 0 18px 28px -10px rgb(79 70 229 / .8); transform: translateY(-2px); }
+.avatar-initials { background: var(--brand-grad); }
+.profile-name { font-family: 'Montserrat', 'Inter', sans-serif; font-size: 18px; font-weight: 800; letter-spacing: -.4px; color: var(--ink); }
+.badge-admin { background: var(--brand-grad); color: #fff; box-shadow: 0 6px 14px -8px rgb(79 70 229 / .8); }
+.profile-section-title { font-family: 'Montserrat', 'Inter', sans-serif; font-weight: 700; color: var(--ink); }
+
+/* Quản trị: tiêu đề dạng banner */
+.admin-header-row {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  align-items: center;
+  padding: 28px 32px;
+  border-radius: 22px;
+  color: #fff;
+  background: linear-gradient(120deg, #0B1250 0%, #1D2A9E 50%, #4F46E5 100%);
+  box-shadow: 0 28px 56px -28px rgb(29 42 158 / .7), inset 0 1px 0 rgb(255 255 255 / .18);
+}
+.admin-header-row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(420px 220px at 100% 0%, rgb(34 211 238 / .35), transparent 70%),
+    radial-gradient(rgb(255 255 255 / .14) 1px, transparent 1px) 0 0 / 22px 22px;
+  mask-image: linear-gradient(100deg, #000 30%, transparent);
+  -webkit-mask-image: linear-gradient(100deg, #000 30%, transparent);
+}
+.admin-header-row .admin-badge-tag { color: #fff; background: rgb(255 255 255 / .16); border: 1px solid rgb(255 255 255 / .28); backdrop-filter: blur(6px); }
+.admin-header-row .admin-page-title { color: #fff; }
+.admin-header-row .admin-page-subtitle { color: rgb(255 255 255 / .78); }
+.admin-header-row .admin-stat-pill { min-width: 150px; background: rgb(255 255 255 / .12); border: 1px solid rgb(255 255 255 / .26); backdrop-filter: blur(8px); box-shadow: none; }
+.admin-header-row .admin-stat-pill .stat-label { color: rgb(255 255 255 / .75); }
+.admin-header-row .admin-stat-pill .stat-val { font-family: 'Montserrat', 'Inter', sans-serif; font-size: 30px; font-weight: 800; color: #fff; }
+.admin-controls-card { border: 1px solid var(--hairline); border-radius: 16px; box-shadow: var(--shadow-card); }
+.admin-table tr, .members-table tr { transition: background .2s; }
+
+@media (max-width: 768px) { .admin-header-row { flex-direction: column; align-items: flex-start; padding: 22px; } }
+@media (prefers-reduced-motion: reduce) { .profile-card { animation: none; } }
+
+/* Chi tiết task: thanh breadcrumb thẳng hàng với nội dung */
+.task-detail-page-wrapper { background: transparent; min-height: 0; }
+.task-detail-page-wrapper .task-detail-top-bar {
+  max-width: 1200px;
+  margin: 0 auto 16px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.task-detail-page-wrapper .task-detail-scroll-body { padding: 0 0 24px; }
+.task-detail-breadcrumb { min-width: 0; flex-wrap: nowrap; }
+.task-detail-breadcrumb .btn-back-kanban { flex-shrink: 0; background: var(--white); box-shadow: var(--shadow-card); }
