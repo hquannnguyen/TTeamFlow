@@ -26,6 +26,8 @@ export interface KanbanTask {
     checklistItems: number;
     comments: number;
   };
+  /** Số mục checklist đã hoàn thành */
+  checklistDone?: number;
 }
 
 export interface KanbanColumn {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Skeleton } from '../../../components/ui/Skeleton';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAdminUsers, updateUserStatus } from '../api/admin-users.api';
 import { AdminUser } from '../types/admin.types';
@@ -200,9 +201,17 @@ export function AdminUsersPage() {
       {/* ── Table / Content ── */}
       <div className="admin-table-card">
         {isLoading ? (
-          <div className="admin-table-loading">
-            <div className="spinner-ring" />
-            <p>Đang tải danh sách người dùng...</p>
+          <div className="sk-col" role="status" aria-busy="true" aria-label="Đang tải danh sách người dùng" style={{ padding: 20 }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="sk-row sk-table-row">
+                <Skeleton w={36} h={36} radius="50%" />
+                <div className="sk-col" style={{ flex: 1 }}>
+                  <Skeleton w="30%" h={13} />
+                  <Skeleton w="22%" h={11} />
+                </div>
+                <Skeleton w={90} h={22} radius={11} />
+              </div>
+            ))}
           </div>
         ) : isError ? (
           <div className="admin-table-error">
@@ -427,7 +436,7 @@ export function AdminUsersPage() {
               <p>
                 Bạn có chắc chắn muốn{' '}
                 <strong>{actionType === 'LOCK' ? 'khóa' : 'mở khóa'}</strong> tài khoản của{' '}
-                <span style={{ color: '#1e293b', fontWeight: 600 }}>
+                <span style={{ color: 'var(--slate-800)', fontWeight: 600 }}>
                   {selectedUserForAction.fullName}
                 </span>{' '}
                 (<code>{selectedUserForAction.email}</code>)?

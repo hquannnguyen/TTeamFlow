@@ -16,6 +16,7 @@ interface KanbanTaskCardProps {
 function getPriorityLabel(priority: string) {
   switch (priority) {
     case 'URGENT':
+      return { text: 'Khẩn cấp', className: 'urgent' };
     case 'HIGH':
       return { text: 'Cao', className: 'high' };
     case 'MEDIUM':
@@ -47,6 +48,14 @@ function isOverdue(dateStr?: string | null, isCompleted?: boolean) {
   return d.getTime() < Date.now();
 }
 
+/** Số ngày còn lại tới hạn (làm tròn lên), âm nếu đã quá hạn. */
+function daysLeft(dateStr?: string | null) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return Math.ceil((d.getTime() - Date.now()) / 86_400_000);
+}
+
 function getInitials(name?: string) {
   if (!name) return '?';
   const parts = name.trim().split(/\s+/);
@@ -71,6 +80,8 @@ export function KanbanTaskCard({
   const formattedDueDate = formatDate(task.dueDate);
   const overdue = isOverdue(task.dueDate, isCompletedColumn || Boolean(task.completedAt));
   const isDone = isCompletedColumn || Boolean(task.completedAt);
+  const left = daysLeft(task.dueDate);
+  const dueSoon = !isDone && !overdue && left !== null && left <= 2;
 
   // Key representation like Stitch: TTF-104
   const taskCode = `${projectKey}-${task.taskNumber || (task.position > 0 ? Math.floor(task.position / 100) : 1)}`;
@@ -82,10 +93,12 @@ export function KanbanTaskCard({
   // Checklists or comment counts
   const checklistTotal = task._count?.checklistItems ?? 0;
   const hasProgress = checklistTotal > 0;
+  const checklistDone = isDone ? checklistTotal : Math.min(task.checklistDone ?? 0, checklistTotal);
+  const checklistPct = checklistTotal > 0 ? Math.round((checklistDone / checklistTotal) * 100) : 0;
 
   return (
     <div
-      className={`stitch-task-card ${isDragging ? 'dragging' : ''}`}
+      className={`stitch-task-card prio-${priorityInfo.className} ${isDragging ? 'dragging' : ''} ${isDone ? 'is-done' : ''}`}
       draggable={!isArchived}
       onDragStart={(e) => {
         if (isArchived) {
@@ -161,12 +174,12 @@ export function KanbanTaskCard({
         <div className="stitch-progress-section">
           <div className="stitch-progress-info">
             <span>Danh sách kiểm tra</span>
-            <span>{isDone ? `${checklistTotal}/${checklistTotal}` : `1/${checklistTotal}`}</span>
+            <span>{checklistDone}/{checklistTotal}</span>
           </div>
           <div className="stitch-progress-track">
             <div
               className="stitch-progress-fill"
-              style={{ width: `${isDone ? 100 : Math.round((1 / checklistTotal) * 100)}%` }}
+              style={{ width: `${checklistPct}%` }}
             />
           </div>
         </div>
@@ -182,12 +195,14 @@ export function KanbanTaskCard({
             Đã xong
           </span>
         ) : formattedDueDate ? (
-          <span className={`stitch-due-date-pill ${overdue ? 'urgent' : ''}`}>
+          <span className={`stitch-due-date-pill ${overdue ? 'urgent' : dueSoon ? 'soon' : ''}`}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
             {formattedDueDate}
+            {overdue && <em>· Quá hạn</em>}
+            {dueSoon && <em>· {left <= 0 ? 'Hôm nay' : `Còn ${left} ngày`}</em>}
           </span>
         ) : (
           <span className="stitch-due-date-pill">

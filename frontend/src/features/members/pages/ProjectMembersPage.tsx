@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { TableSkeleton } from '../../../components/ui/Skeleton';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -26,6 +27,22 @@ export function ProjectMembersPage() {
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
+    try {
+      return localStorage.getItem('members-view') === 'table' ? 'table' : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  function changeView(mode: 'grid' | 'table') {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('members-view', mode);
+    } catch {
+      // bỏ qua nếu bị chặn lưu trữ
+    }
+  }
 
   // Modals state
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -221,14 +238,7 @@ export function ProjectMembersPage() {
 
   // Loading state
   if (isLoadingProjects || (Boolean(currentProjectId) && isLoadingMembers)) {
-    return (
-      <div className="members-page-container loading-state">
-        <div className="spinner-ring" style={{ margin: '60px auto 16px' }} />
-        <p style={{ color: '#64748b', fontSize: '14px', textAlign: 'center' }}>
-          Đang tải danh sách thành viên...
-        </p>
-      </div>
-    );
+    return <TableSkeleton className="members-page-container" label="Đang tải danh sách thành viên" />;
   }
 
   // No projects available state
@@ -263,7 +273,7 @@ export function ProjectMembersPage() {
     return (
       <div className="members-page-container">
         <div className="members-empty-card">
-          <p style={{ color: '#ef4444', fontSize: '15px' }}>
+          <p style={{ color: 'var(--red-500)', fontSize: '15px' }}>
             Không thể tải dữ liệu thành viên dự án hoặc bạn không có quyền truy cập.
           </p>
           <button
@@ -277,6 +287,74 @@ export function ProjectMembersPage() {
         </div>
       </div>
     );
+  }
+
+  function renderRole(member: (typeof members)[number], canEdit: boolean, userId: string) {
+    return (
+      <>
+                      {canEdit ? (
+                        <div className="member-role-select-wrap">
+                          <select
+                            className={`member-role-select role-${member.role.toLowerCase()}`}
+                            value={member.role}
+                            disabled={updateRoleMutation.isPending}
+                            onChange={(e) => {
+                              const newRole = e.target.value as 'MANAGER' | 'MEMBER' | 'VIEWER';
+                              if (newRole !== member.role) {
+                                updateRoleMutation.mutate({
+                                  userId,
+                                  newRole,
+                                });
+                              }
+                            }}
+                          >
+                            <option value="MANAGER">Quản lý (MANAGER)</option>
+                            <option value="MEMBER">Thành viên (MEMBER)</option>
+                            <option value="VIEWER">Người xem (VIEWER)</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <span className={`member-role-badge role-${member.role.toLowerCase()}`}>
+                          {member.role === 'OWNER'
+                            ? 'Chủ sở hữu'
+                            : member.role === 'MANAGER'
+                            ? 'Quản lý'
+                            : member.role === 'MEMBER'
+                            ? 'Thành viên'
+                            : 'Người xem'}
+                        </span>
+                      )}
+      </>
+    );
+  }
+
+  function renderRemove(member: (typeof members)[number], canDelete: boolean, displayName: string) {
+    return (
+      <>
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          className="btn-member-action-delete"
+                          onClick={() => setMemberToRemove(member)}
+                          title={`Xóa ${displayName} khỏi dự án`}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 6h18" />
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <span className="member-action-disabled-placeholder">—</span>
+                      )}
+      </>
+    );
+  }
+
+  function formatJoined(value?: string | null) {
+    return value
+      ? new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : '—';
   }
 
   return (
@@ -411,6 +489,31 @@ export function ProjectMembersPage() {
             <option value="MEMBER">Thành viên ({stats.memberCount})</option>
             <option value="VIEWER">Người xem ({stats.viewerCount})</option>
           </select>
+          <div className="members-view-toggle" role="group" aria-label="Chế độ hiển thị">
+            <button
+              type="button"
+              className={viewMode === 'grid' ? 'active' : ''}
+              onClick={() => changeView('grid')}
+              title="Dạng lưới"
+              aria-pressed={viewMode === 'grid'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={viewMode === 'table' ? 'active' : ''}
+              onClick={() => changeView('table')}
+              title="Dạng bảng"
+              aria-pressed={viewMode === 'table'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -435,6 +538,49 @@ export function ProjectMembersPage() {
                 Xóa bộ lọc tìm kiếm
               </button>
             )}
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="members-grid">
+            {filteredMembers.map((member) => {
+              const userId = member.user?.id || member.userId;
+              const displayName = member.user?.fullName || member.fullName || 'Người dùng';
+              const displayEmail = member.user?.email || member.email || '';
+              const avatar = getMediaUrl(member.user?.avatarUrl || member.avatarUrl);
+              const isSelf = userId === currentUser?.id;
+
+              return (
+                <article
+                  key={member.id || userId}
+                  className={`member-card role-${member.role.toLowerCase()}${isSelf ? ' is-self' : ''}`}
+                >
+                  <div className="member-card-cover" />
+                  <div className="member-card-remove">{renderRemove(member, canRemove(member), displayName)}</div>
+
+                  <div className="member-card-avatar">
+                    {avatar ? (
+                      <img src={avatar} alt={displayName} />
+                    ) : (
+                      <span>{displayName.charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+
+                  <h3 className="member-card-name">
+                    {displayName}
+                    {isSelf && <span className="member-self-badge">Bạn</span>}
+                  </h3>
+                  <p className="member-card-email" title={displayEmail}>{displayEmail}</p>
+
+                  <div className="member-card-role">{renderRole(member, canEditRole(member), userId)}</div>
+
+                  <div className="member-card-foot">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="18" height="18" x="3" y="4" rx="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" />
+                    </svg>
+                    Tham gia {formatJoined(member.joinedAt)}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         ) : (
           <table className="members-table">
@@ -494,38 +640,7 @@ export function ProjectMembersPage() {
 
                     {/* Role column */}
                     <td>
-                      {canEdit ? (
-                        <div className="member-role-select-wrap">
-                          <select
-                            className={`member-role-select role-${member.role.toLowerCase()}`}
-                            value={member.role}
-                            disabled={updateRoleMutation.isPending}
-                            onChange={(e) => {
-                              const newRole = e.target.value as 'MANAGER' | 'MEMBER' | 'VIEWER';
-                              if (newRole !== member.role) {
-                                updateRoleMutation.mutate({
-                                  userId,
-                                  newRole,
-                                });
-                              }
-                            }}
-                          >
-                            <option value="MANAGER">Quản lý (MANAGER)</option>
-                            <option value="MEMBER">Thành viên (MEMBER)</option>
-                            <option value="VIEWER">Người xem (VIEWER)</option>
-                          </select>
-                        </div>
-                      ) : (
-                        <span className={`member-role-badge role-${member.role.toLowerCase()}`}>
-                          {member.role === 'OWNER'
-                            ? 'Chủ sở hữu'
-                            : member.role === 'MANAGER'
-                            ? 'Quản lý'
-                            : member.role === 'MEMBER'
-                            ? 'Thành viên'
-                            : 'Người xem'}
-                        </span>
-                      )}
+                      {renderRole(member, canEdit, userId)}
                     </td>
 
                     {/* Joined date column */}
@@ -535,22 +650,7 @@ export function ProjectMembersPage() {
 
                     {/* Actions column */}
                     <td style={{ textAlign: 'right' }}>
-                      {canDelete ? (
-                        <button
-                          type="button"
-                          className="btn-member-action-delete"
-                          onClick={() => setMemberToRemove(member)}
-                          title={`Xóa ${displayName} khỏi dự án`}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M3 6h18" />
-                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                          </svg>
-                        </button>
-                      ) : (
-                        <span className="member-action-disabled-placeholder">—</span>
-                      )}
+                      {renderRemove(member, canDelete, displayName)}
                     </td>
                   </tr>
                 );

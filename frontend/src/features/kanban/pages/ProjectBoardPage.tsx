@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { KanbanSkeleton } from '../../../components/ui/Skeleton';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fireConfetti } from '../../../components/ui/confetti';
 import {
   getBoard,
   moveTask,
@@ -163,6 +165,11 @@ export function ProjectBoardPage() {
       return { previousBoard };
     },
     onSuccess: (_data, variables) => {
+      if (columns.find((c) => c.id === variables.targetColumnId)?.isCompleted) {
+        fireConfetti();
+        toast.success('Hoàn thành nhiệm vụ! 🎉');
+      }
+
       // Optimistically update taskDetail cache if loaded
       queryClient.setQueryData<KanbanTask>(['taskDetail', variables.taskId], (old) => {
         if (!old) return old;
@@ -342,12 +349,7 @@ export function ProjectBoardPage() {
   }, [columns, searchQuery, selectedAssignee, selectedPriority, onlyOverdue]);
 
   if (isLoadingProjects || (Boolean(currentProjectId) && isLoading)) {
-    return (
-      <div className="kanban-page-container" style={{ padding: '60px 20px', textAlign: 'center' }}>
-        <div className="spinner-ring" style={{ margin: '0 auto 16px' }} />
-        <p style={{ color: '#64748b', fontSize: '14px' }}>Đang tải bảng Kanban...</p>
-      </div>
-    );
+    return <KanbanSkeleton />;
   }
 
   if (!currentProjectId && projects.length === 0) {
@@ -357,7 +359,7 @@ export function ProjectBoardPage() {
           style={{
             maxWidth: '480px',
             margin: '40px auto',
-            background: '#ffffff',
+            background: 'var(--white)',
             borderRadius: '16px',
             padding: '40px 24px',
             border: '1px solid #e2e8f0',
@@ -374,7 +376,7 @@ export function ProjectBoardPage() {
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 20px',
-              color: '#4f46e5',
+              color: 'var(--indigo-600)',
             }}
           >
             <svg
@@ -392,10 +394,10 @@ export function ProjectBoardPage() {
               <path d="M15 3v18" />
             </svg>
           </div>
-          <h2 style={{ fontSize: '20px', fontWeight: '700', color: '#0f172a', marginBottom: '8px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: '700', color: 'var(--slate-900)', marginBottom: '8px' }}>
             Chưa có dự án nào
           </h2>
-          <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.6', marginBottom: '24px' }}>
+          <p style={{ color: 'var(--slate-500)', fontSize: '14px', lineHeight: '1.6', marginBottom: '24px' }}>
             Bạn cần có ít nhất 1 dự án để quản lý công việc và xem bảng Kanban. Vui lòng tạo dự án mới để bắt đầu.
           </p>
           <button
@@ -419,7 +421,7 @@ export function ProjectBoardPage() {
   if (isError || !currentProjectId) {
     return (
       <div className="kanban-page-container" style={{ padding: '40px', textAlign: 'center' }}>
-        <p style={{ color: '#ef4444', fontSize: '15px' }}>
+        <p style={{ color: 'var(--red-500)', fontSize: '15px' }}>
           Không thể tải dữ liệu bảng Kanban hoặc dự án không tồn tại.
         </p>
         <button
@@ -633,6 +635,8 @@ export function ProjectBoardPage() {
             : 'todo';
 
           const isDragOver = !isArchived && dragOverColumnId === column.id;
+          const totalBoardTasks = columns.reduce((sum, c) => sum + c.tasks.length, 0);
+          const sharePct = totalBoardTasks > 0 ? Math.round((column.tasks.length / totalBoardTasks) * 100) : 0;
 
           return (
             <div
@@ -703,7 +707,7 @@ export function ProjectBoardPage() {
                   e.dataTransfer.setData('text/plain', `column:${column.id}`);
                   e.dataTransfer.effectAllowed = 'move';
                 }}
-                style={{ cursor: isArchived ? 'default' : 'grab' }}
+                style={{ cursor: isArchived ? 'default' : 'grab', '--share': sharePct } as React.CSSProperties}
                 title={isArchived ? column.name : 'Kéo thả để thay đổi thứ tự cột'}
               >
                 <div className="kanban-col-title-group">
@@ -750,6 +754,7 @@ export function ProjectBoardPage() {
                   )}
 
                   <span className="kanban-col-count-pill">{column.tasks.length}</span>
+                  {totalBoardTasks > 0 && <span className="kanban-col-share">{sharePct}%</span>}
                 </div>
 
                 {!isArchived && (
@@ -802,15 +807,13 @@ export function ProjectBoardPage() {
                 }}
               >
                 {column.tasks.length === 0 ? (
-                  <div
-                    style={{
-                      padding: '24px 16px',
-                      textAlign: 'center',
-                      color: '#94a3b8',
-                      fontSize: '12.5px',
-                    }}
-                  >
-                    Chưa có nhiệm vụ
+                  <div className="kanban-col-empty">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="16" rx="3" strokeDasharray="3 3" />
+                      <path d="M12 9v6M9 12h6" />
+                    </svg>
+                    <strong>Chưa có nhiệm vụ</strong>
+                    <span>{isArchived ? 'Dự án đã lưu trữ' : 'Kéo task vào đây hoặc bấm “+ Mới”'}</span>
                   </div>
                 ) : (
                   column.tasks.map((task) => (
@@ -836,7 +839,7 @@ export function ProjectBoardPage() {
         {!isArchived && (
           isAddingColumn ? (
             <div className="kanban-column-card" style={{ padding: '16px', gap: '12px' }}>
-              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>Thêm cột mới</h4>
+              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--slate-900)' }}>Thêm cột mới</h4>
               <input
                 type="text"
                 className="kanban-col-name-input"
@@ -875,7 +878,7 @@ export function ProjectBoardPage() {
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="19" x2="19" y2="12" />
               </svg>
-              <span style={{ fontSize: '13.5px', fontWeight: 600, color: '#4f46e5' }}>+ Thêm cột mới</span>
+              <span style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--indigo-600)' }}>+ Thêm cột mới</span>
             </div>
           )
         )}
@@ -958,7 +961,7 @@ export function ProjectBoardPage() {
                 </div>
               ) : (
                 <div className="delete-column-empty-card">
-                  <p style={{ color: '#475569', fontSize: '14px', margin: 0, lineHeight: 1.6 }}>
+                  <p style={{ color: 'var(--slate-600)', fontSize: '14px', margin: 0, lineHeight: 1.6 }}>
                     Bạn có chắc chắn muốn xóa cột <strong>"{deletingColumn.name}"</strong>? Thao tác này không thể hoàn tất nếu không tạo lại cột.
                   </p>
                 </div>

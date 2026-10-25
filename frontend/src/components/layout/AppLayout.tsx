@@ -10,6 +10,8 @@ import { toast } from '../ui/toast.store';
 import { useActiveProjectStore } from '../../features/projects/store/active-project.store';
 import { getProjects } from '../../features/projects/api/projects.api';
 import { getProjectTheme } from '../../features/projects/utils/project-theme.util';
+import { HelpModal } from './HelpModal';
+import { useTheme } from '../../hooks/useTheme';
 import { NotificationBell } from '../../features/notifications/components/NotificationBell';
 
 function getInitials(name?: string) {
@@ -28,7 +30,15 @@ export function AppLayout() {
 
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const { theme, toggle: toggleTheme } = useTheme();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Đóng menu mobile khi chuyển trang
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   // Lấy danh sách dự án gần đây của người dùng
   const { data: projects = [] } = useQuery({
@@ -49,6 +59,8 @@ export function AppLayout() {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 5);
   }, [projects]);
+
+  const activeProject = projects.find((p) => p.id === activeProjectId);
 
   const avatarUrl = getMediaUrl(user?.avatarUrl);
 
@@ -94,8 +106,15 @@ export function AppLayout() {
   const isAdminActive = location.pathname.startsWith('/admin');
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${sidebarOpen ? ' sidebar-open' : ''}`}>
       {/* ── Left Sidebar ── */}
+      <button
+        type="button"
+        className="sidebar-backdrop"
+        aria-label="Đóng menu"
+        tabIndex={-1}
+        onClick={() => setSidebarOpen(false)}
+      />
       <aside className="sidebar">
         {/* Brand Logo */}
         <Link
@@ -128,7 +147,7 @@ export function AppLayout() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
             </svg>
-            <span>{user?.systemRole === 'ADMIN' ? 'Quản lý dự án' : 'Dự án của tôi'}</span>
+            <span>Dự án</span>
           </Link>
 
           <Link
@@ -176,8 +195,8 @@ export function AppLayout() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-              <span style={{ flex: 1 }}>Quản trị người dùng</span>
-              <span className="sidebar-pro-badge" style={{ background: '#4338CA', color: '#fff' }}>ADMIN</span>
+              <span style={{ flex: 1 }}>Quản trị</span>
+              <span className="sidebar-pro-badge" style={{ background: 'var(--indigo-700)', color: '#fff' }}>ADMIN</span>
             </Link>
           )}
         </nav>
@@ -206,7 +225,7 @@ export function AppLayout() {
               );
             })
           ) : (
-            <span style={{ fontSize: 12, color: '#94a3b8', padding: '4px 6px', display: 'block' }}>
+            <span className="sidebar-empty">
               Chưa có dự án nào
             </span>
           )}
@@ -228,7 +247,7 @@ export function AppLayout() {
                 >
                   <span
                     className="fav-dot gray"
-                    style={{ background: '#94a3b8' }}
+                    style={{ background: 'var(--slate-400)' }}
                   />
                   <span className="sidebar-fav-name" style={{ color: 'var(--gray-500)' }}>
                     {p.name}
@@ -237,7 +256,7 @@ export function AppLayout() {
               );
             })
           ) : (
-            <span style={{ fontSize: 12, color: '#94a3b8', padding: '4px 6px', display: 'block' }}>
+            <span className="sidebar-empty">
               Chưa có dự án lưu trữ
             </span>
           )}
@@ -247,10 +266,50 @@ export function AppLayout() {
       {/* ── Main Wrapper (Header + Content) ── */}
       <div className="main-wrapper">
         {/* Top Header Bar */}
-        <header className="top-header" style={{ justifyContent: 'flex-end' }}>
+        <header className="top-header" style={{ justifyContent: 'space-between' }}>
+          <button
+            type="button"
+            className="top-icon-btn top-menu-btn"
+            aria-label="Mở menu"
+            aria-expanded={sidebarOpen}
+            onClick={() => setSidebarOpen((v) => !v)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="18" x2="20" y2="18" />
+            </svg>
+          </button>
+          <div className="top-header-project" title="Dự án đang chọn">
+            {activeProject ? (
+              <>
+                <span className="fav-dot" style={{ background: getProjectTheme(activeProject.projectKey || activeProject.id).badgeBg }} />
+                <span className="top-header-project-name">{activeProject.name}</span>
+              </>
+            ) : null}
+          </div>
           <div className="top-header-actions">
 
-            <button className="top-icon-btn" title="Trợ giúp" type="button">
+            <button
+              type="button"
+              className="top-icon-btn theme-toggle"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+              aria-label={theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+            >
+              {theme === 'dark' ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="4" />
+                  <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
+
+            <button className="top-icon-btn" title="Trợ giúp" aria-label="Trợ giúp" type="button" onClick={() => setShowHelp(true)}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
@@ -379,6 +438,8 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
 
       {/* Change Password Modal */}
       {showChangePasswordModal && (

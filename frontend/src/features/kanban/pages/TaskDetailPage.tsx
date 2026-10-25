@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { TaskDetailSkeleton } from '../../../components/ui/Skeleton';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fireConfetti } from '../../../components/ui/confetti';
 import {
   getBoard,
   getTaskDetail,
@@ -246,7 +248,12 @@ export function TaskDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       broadcastNotificationUpdate();
-      toast.success('Đã chuyển trạng thái');
+      if (columns.find((c) => c.id === targetColumnId)?.isCompleted) {
+        fireConfetti();
+        toast.success('Hoàn thành nhiệm vụ! 🎉');
+      } else {
+        toast.success('Đã chuyển trạng thái');
+      }
     },
   });
 
@@ -504,12 +511,7 @@ export function TaskDetailPage() {
   }, [taskLogs, comments, formatActivityAction]);
 
   if (isLoadingTask) {
-    return (
-      <div className="task-detail-page-wrapper" style={{ padding: '60px 24px', textAlign: 'center' }}>
-        <div className="spinner-ring" style={{ margin: '0 auto 16px' }} />
-        <p style={{ color: '#64748b', fontSize: '14px' }}>Đang tải thông tin chi tiết nhiệm vụ...</p>
-      </div>
-    );
+    return <TaskDetailSkeleton />;
   }
 
   return (
@@ -524,8 +526,8 @@ export function TaskDetailPage() {
           >
             ← Bảng Kanban
           </button>
-          <span style={{ color: '#94a3b8' }}>Nhiệm vụ / </span>
-          <span style={{ color: '#0f172a', fontWeight: 600 }}>{task?.title || 'Chi tiết nhiệm vụ'}</span>
+          <span style={{ color: 'var(--slate-400)' }}>Nhiệm vụ / </span>
+          <span style={{ color: 'var(--slate-900)', fontWeight: 600 }}>{task?.title || 'Chi tiết nhiệm vụ'}</span>
         </div>
       </div>
 
@@ -544,7 +546,7 @@ export function TaskDetailPage() {
         )}
 
         {/* Header Meta Card */}
-        <div className="task-detail-meta-card">
+        <div className={`task-detail-meta-card prio-${(task?.priority ?? 'LOW').toLowerCase()}`}>
           <div className="task-detail-header-row">
             <div className="task-detail-title-col">
               {!isArchived && isEditingTitle ? (
@@ -582,27 +584,36 @@ export function TaskDetailPage() {
                 </h1>
               )}
             </div>
-
-            {/* Status Selector Badge in Header */}
-            <div className="task-detail-status-col">
-              <div className="task-status-badge-wrap">
-                <span className="task-status-label">Trạng thái:</span>
-                <select
-                  className="task-status-select-pill"
-                  value={task?.columnId || ''}
-                  disabled={isArchived}
-                  onChange={(e) => moveTaskMutation.mutate(e.target.value)}
-                  title={isArchived ? 'Dự án đã lưu trữ' : 'Bấm để thay đổi trạng thái'}
-                >
-                  {columns.map((col) => (
-                    <option key={col.id} value={col.id}>
-                      {col.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
           </div>
+
+          {/* Thanh bước trạng thái: bấm vào một bước để chuyển cột */}
+          <ol className="task-stepper" aria-label="Trạng thái nhiệm vụ">
+            {columns.map((col, idx) => {
+              const currentIdx = columns.findIndex((c) => c.id === task?.columnId);
+              const state = idx < currentIdx ? 'done' : idx === currentIdx ? 'current' : 'todo';
+              return (
+                <li key={col.id} className={`task-step ${state}`}>
+                  <button
+                    type="button"
+                    disabled={isArchived || moveTaskMutation.isPending || idx === currentIdx}
+                    onClick={() => moveTaskMutation.mutate(col.id)}
+                    title={idx === currentIdx ? 'Trạng thái hiện tại' : `Chuyển sang "${col.name}"`}
+                  >
+                    <span className="task-step-dot">
+                      {state === 'done' ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                      ) : (
+                        idx + 1
+                      )}
+                    </span>
+                    <span className="task-step-name">{col.name}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
 
           {/* Meta Grid (Dự án, Người được phân công, Độ ưu tiên, Thời hạn) */}
           <div className="task-meta-grid">
@@ -616,7 +627,7 @@ export function TaskDetailPage() {
               <span className="task-meta-label">Người được phân công</span>
               <div className="task-assignees-container">
                 {assignedUsers.length === 0 ? (
-                  <span style={{ fontSize: '13px', color: '#94a3b8', fontStyle: 'italic' }}>
+                  <span style={{ fontSize: '13px', color: 'var(--slate-400)', fontStyle: 'italic' }}>
                     Chưa phân công
                   </span>
                 ) : (
@@ -641,7 +652,7 @@ export function TaskDetailPage() {
                                   border: 'none',
                                   cursor: 'pointer',
                                   fontSize: '11px',
-                                  color: '#6366f1',
+                                  color: 'var(--indigo-500)',
                                   fontWeight: 600,
                                   padding: '0 2px',
                                 }}
@@ -684,14 +695,14 @@ export function TaskDetailPage() {
                       alignItems: 'center',
                       gap: '6px',
                       padding: '4px 8px',
-                      background: '#f8fafc',
+                      background: 'var(--slate-50)',
                       border: '1px solid #cbd5e1',
                       borderRadius: '6px',
                       boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
                       marginRight: '6px',
                     }}
                   >
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--slate-500)' }}>
                       Chuyển giao cho:
                     </span>
                     <select
@@ -729,7 +740,7 @@ export function TaskDetailPage() {
                         border: 'none',
                         cursor: 'pointer',
                         fontSize: '12px',
-                        color: '#94a3b8',
+                        color: 'var(--slate-400)',
                       }}
                       onClick={() => setTransferringUserId(null)}
                       title="Hủy"
@@ -836,6 +847,35 @@ export function TaskDetailPage() {
               </div>
             ) : (
               <div className="task-checklists-box">
+                {checklists.length > 0 && (() => {
+                  const done = checklists.filter((c) => Boolean(c.isCompleted ?? c.isDone)).length;
+                  const pct = Math.round((done / checklists.length) * 100);
+                  const R = 18;
+                  const C = 2 * Math.PI * R;
+                  return (
+                    <div className="checklist-progress">
+                      <svg width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
+                        <circle cx="23" cy="23" r={R} fill="none" strokeWidth="5" className="cp-track" />
+                        <circle
+                          cx="23"
+                          cy="23"
+                          r={R}
+                          fill="none"
+                          strokeWidth="5"
+                          strokeLinecap="round"
+                          className="cp-fill"
+                          strokeDasharray={C}
+                          strokeDashoffset={C - (pct / 100) * C}
+                          transform="rotate(-90 23 23)"
+                        />
+                      </svg>
+                      <div>
+                        <strong>{pct}% hoàn thành</strong>
+                        <small>{done}/{checklists.length} mục</small>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="checklists-list">
                   {checklists.map((item) => {
                     const isChecked = Boolean(item.isCompleted ?? item.isDone);
@@ -1069,7 +1109,7 @@ export function TaskDetailPage() {
             ) : (
               <div className="activity-stream">
                 {unifiedTimeline.length === 0 ? (
-                  <p style={{ color: '#94a3b8', fontSize: '13px' }}>Chưa có nhật ký hoạt động cho nhiệm vụ này.</p>
+                  <p style={{ color: 'var(--slate-400)', fontSize: '13px' }}>Chưa có nhật ký hoạt động cho nhiệm vụ này.</p>
                 ) : (
                   unifiedTimeline.map((item) => (
                     <div key={item.id} className="activity-item">

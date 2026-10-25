@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { TaskDetailSkeleton } from '../../../components/ui/Skeleton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getTaskDetail,
@@ -250,7 +251,7 @@ export function TaskDetailView({
         {/* Top Header / Status Pipeline Bar */}
         <div className="task-detail-top-bar">
           <div className="task-detail-breadcrumb">
-            <span style={{ color: '#94a3b8' }}>Nhiệm vụ / </span>
+            <span style={{ color: 'var(--slate-400)' }}>Nhiệm vụ / </span>
             <span style={{ color: '#38bdf8', fontWeight: 600 }}>{task?.title || 'Bảng Kanban'}</span>
           </div>
           <button type="button" className="task-detail-close-btn" onClick={onClose}>
@@ -277,10 +278,7 @@ export function TaskDetailView({
         </div>
 
         {isLoadingTask ? (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#94a3b8' }}>
-            <div className="spinner-ring" style={{ margin: '0 auto 16px' }} />
-            Đang tải chi tiết công việc...
-          </div>
+          <TaskDetailSkeleton />
         ) : (
           <div className="task-detail-scroll-body">
             {/* Header Meta Card */}
@@ -610,7 +608,7 @@ export function TaskDetailView({
                 ) : (
                   <div className="activity-stream">
                     {taskLogs.length === 0 ? (
-                      <p style={{ color: '#94a3b8', fontSize: '13px' }}>Chưa có nhật ký hoạt động cho nhiệm vụ này.</p>
+                      <p style={{ color: 'var(--slate-400)', fontSize: '13px' }}>Chưa có nhật ký hoạt động cho nhiệm vụ này.</p>
                     ) : (
                       taskLogs.map((log) => {
                         const meta = log.metadata;

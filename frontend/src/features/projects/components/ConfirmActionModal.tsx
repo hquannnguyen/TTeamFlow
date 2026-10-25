@@ -126,7 +126,7 @@ export function ConfirmActionModal({
             className="btn"
             style={{
               background: btnBg,
-              color: '#FFFFFF',
+              color: '#fff',
               border: 'none',
               width: 'auto',
               marginTop: 0,

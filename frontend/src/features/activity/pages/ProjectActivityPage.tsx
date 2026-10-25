@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { TableSkeleton } from '../../../components/ui/Skeleton';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getProjects, getProject } from '../../projects/api/projects.api';
@@ -285,14 +286,7 @@ export function ProjectActivityPage() {
 
   // Loading state on initial load
   if (isLoadingProjects || (Boolean(currentProjectId) && isLoadingLogs && page === 1 && accumulatedLogs.length === 0)) {
-    return (
-      <div className="activity-page-container loading-state">
-        <div className="spinner-ring" style={{ margin: '60px auto 16px' }} />
-        <p style={{ color: '#64748b', fontSize: '14px', textAlign: 'center' }}>
-          Đang tải nhật ký hoạt động dự án...
-        </p>
-      </div>
-    );
+    return <TableSkeleton className="activity-page-container" rows={6} label="Đang tải nhật ký hoạt động" />;
   }
 
   // Empty projects state
@@ -325,7 +319,7 @@ export function ProjectActivityPage() {
     return (
       <div className="activity-page-container">
         <div className="members-empty-card">
-          <p style={{ color: '#ef4444', fontSize: '15px', fontWeight: 500 }}>
+          <p style={{ color: 'var(--red-500)', fontSize: '15px', fontWeight: 500 }}>
             Không thể tải nhật ký hoạt động của dự án hoặc bạn không có quyền truy cập.
           </p>
           <button

@@ -67,7 +67,7 @@ export function CreateTaskModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
-          <h2 className="modal-title" style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+          <h2 className="modal-title" style={{ fontSize: '18px', fontWeight: 700, color: 'var(--slate-900)' }}>
             Tạo nhiệm vụ mới
           </h2>
           <button type="button" className="btn-close-modal" onClick={onClose}>
@@ -86,8 +86,8 @@ export function CreateTaskModal({
         >
           {/* 1. Tiêu đề nhiệm vụ */}
           <div className="form-group" style={{ marginBottom: '20px' }}>
-            <label className="form-label" style={{ fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
-              Tiêu đề nhiệm vụ <span style={{ color: '#ef4444' }}>*</span>
+            <label className="form-label" style={{ fontWeight: 600, color: 'var(--slate-700)', marginBottom: '8px' }}>
+              Tiêu đề nhiệm vụ <span style={{ color: 'var(--red-500)' }}>*</span>
             </label>
             <input
               type="text"
@@ -109,7 +109,7 @@ export function CreateTaskModal({
 
           {/* 2. Người được phân công nhiệm vụ */}
           <div className="form-group" style={{ marginBottom: '24px' }}>
-            <label className="form-label" style={{ fontWeight: 600, color: '#334155', marginBottom: '8px' }}>
+            <label className="form-label" style={{ fontWeight: 600, color: 'var(--slate-700)', marginBottom: '8px' }}>
               Người được phân công
             </label>
             <MemberAutocomplete
@@ -138,8 +138,8 @@ export function CreateTaskModal({
                 padding: '10px 24px',
                 borderRadius: '8px',
                 fontWeight: 600,
-                background: '#6366f1',
-                borderColor: '#6366f1',
+                background: 'var(--indigo-500)',
+                borderColor: 'var(--indigo-500)',
               }}
               disabled={mutation.isPending || !title.trim()}
             >

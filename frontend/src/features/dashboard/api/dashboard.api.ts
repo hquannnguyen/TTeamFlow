@@ -27,8 +27,6 @@ export async function getDashboardMetrics(projectId: string): Promise<DashboardM
     completedTasks: completed,
     overdueTasks: data.overdueTasks ?? 0,
     progress: data.progress ?? 0,
-    targetProgress: data.targetProgress ?? 80,
-    growthRate: data.growthRate ?? (total > 0 ? 12 : 0),
     activeTasks: active,
     statusDistribution: (data.statusDistribution || []).map((col, idx) => ({
       ...col,
