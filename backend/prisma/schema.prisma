@@ -70,6 +70,7 @@ model User {
   refreshTokens      RefreshToken[]
   notifications      Notification[]   @relation("UserNotifications")
   actedNotifications Notification[]   @relation("NotificationActor")
+  attachments        Attachment[]     @relation("AttachmentUploader")
 
   @@map("users")
 }
@@ -157,6 +158,7 @@ model Task {
   checklistItems ChecklistItem[]
   comments       Comment[]
   notifications  Notification[]
+  attachments    Attachment[]     @relation("TaskAttachments")
 
   @@index([projectId])
   @@index([columnId, position])
@@ -263,4 +265,23 @@ model Notification {
   @@index([userId, isRead, createdAt])
   @@index([userId, createdAt])
   @@map("notifications")
+}
+
+model Attachment {
+  id         String   @id @default(uuid()) @db.Uuid
+  taskId     String   @map("task_id") @db.Uuid
+  uploaderId String   @map("uploader_id") @db.Uuid
+  objectKey  String   @map("object_key") @db.VarChar(300)
+  fileName   String   @map("file_name") @db.VarChar(255)
+  mimeType   String   @map("mime_type") @db.VarChar(100)
+  sizeBytes  Int      @map("size_bytes")
+  isUploaded Boolean  @default(false) @map("is_uploaded")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  task     Task @relation("TaskAttachments", fields: [taskId], references: [id], onDelete: Cascade)
+  uploader User @relation("AttachmentUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([uploaderId])
+  @@map("attachments")
 }
