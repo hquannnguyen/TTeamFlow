@@ -7,12 +7,17 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import { ActionTokenPurpose } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { MailService } from "../../common/mail/mail.service";
 import * as bcrypt from "bcrypt";
+import * as crypto from "node:crypto";
 import type { StringValue } from "ms";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
 
 @Injectable()
 export class AuthService {
@@ -20,6 +25,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly mail: MailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -44,6 +50,18 @@ export class AuthService {
         createdAt: true,
       },
     });
+
+    // Gửi email xác minh (best-effort — lỗi mail không chặn đăng ký)
+    try {
+      const token = await this.createActionToken(
+        user.id,
+        ActionTokenPurpose.EMAIL_VERIFY,
+        24 * 60 * 60 * 1000,
+      );
+      await this.mail.sendVerificationEmail(email, user.fullName, token);
+    } catch (error) {
+      console.error("[AuthService] Không gửi được email xác minh:", error);
+    }
 
     return user;
   }
@@ -244,5 +262,183 @@ export class AuthService {
     });
 
     return { accessToken, refreshToken };
+  }
+
+  // ── Quên / đặt lại mật khẩu & xác minh email ────────────────────────────────
+
+  /**
+   * Tạo ActionToken: sinh token ngẫu nhiên, lưu SHA-256 hash, xoá token cũ cùng mục đích.
+   * Trả về token gốc (chỉ xuất hiện trong email, không lưu DB).
+   */
+  private async createActionToken(
+    userId: string,
+    purpose: ActionTokenPurpose,
+    ttlMs: number,
+  ) {
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    await this.prisma.$transaction([
+      // Chỉ giữ tối đa 1 token sống cho mỗi mục đích
+      this.prisma.actionToken.deleteMany({
+        where: { userId, purpose, usedAt: null },
+      }),
+      this.prisma.actionToken.create({
+        data: {
+          userId,
+          tokenHash,
+          purpose,
+          expiresAt: new Date(Date.now() + ttlMs),
+        },
+      }),
+    ]);
+
+    return token;
+  }
+
+  /**
+   * Xác minh ActionToken: băm token gốc tra DB, kiểm purpose/hết hạn/đã dùng.
+   * Trả về bản ghi + userId để caller xử lý tiếp (dùng một lần).
+   */
+  private async verifyActionToken(token: string, purpose: ActionTokenPurpose) {
+    if (!token) throw new BadRequestException("Token không hợp lệ");
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const record = await this.prisma.actionToken.findUnique({
+      where: { tokenHash },
+    });
+
+    if (
+      !record ||
+      record.purpose !== purpose ||
+      record.usedAt !== null ||
+      record.expiresAt < new Date()
+    ) {
+      throw new BadRequestException(
+        "Liên kết không hợp lệ hoặc đã hết hạn. Vui lòng yêu cầu liên kết mới.",
+      );
+    }
+
+    return record;
+  }
+
+  /**
+   * Luôn trả về thông điệp chung chung — không tiết lộ email có tồn tại hay không (chống dò email).
+   */
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+      select: { id: true, fullName: true, email: true, isActive: true },
+    });
+
+    if (user && user.isActive) {
+      const token = await this.createActionToken(
+        user.id,
+        ActionTokenPurpose.PASSWORD_RESET,
+        30 * 60 * 1000,
+      );
+      await this.mail.sendPasswordResetEmail(user.email, user.fullName, token);
+    }
+
+    return {
+      message:
+        "Nếu email tồn tại trong hệ thống, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu. Vui lòng kiểm tra hộp thư.",
+    };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    const record = await this.verifyActionToken(
+      dto.token,
+      ActionTokenPurpose.PASSWORD_RESET,
+    );
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: record.userId },
+      select: { id: true, passwordHash: true },
+    });
+    if (!user) throw new BadRequestException("Tài khoản không tồn tại");
+
+    const isSame = await bcrypt.compare(dto.newPassword, user.passwordHash);
+    if (isSame) {
+      throw new BadRequestException(
+        "Mật khẩu mới không được trùng với mật khẩu hiện tại",
+      );
+    }
+
+    const newHash = await bcrypt.hash(dto.newPassword, 10);
+    const now = new Date();
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: newHash, passwordChangedAt: now },
+      }),
+      // Đặt lại mật khẩu ⇒ thu hồi mọi phiên đăng nhập đang có
+      this.prisma.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: now },
+      }),
+      // Token chỉ dùng một lần
+      this.prisma.actionToken.update({
+        where: { id: record.id },
+        data: { usedAt: now },
+      }),
+    ]);
+
+    return {
+      message:
+        "Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.",
+    };
+  }
+
+  async verifyEmail(token: string) {
+    const record = await this.verifyActionToken(
+      token,
+      ActionTokenPurpose.EMAIL_VERIFY,
+    );
+
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { emailVerified: true },
+      }),
+      this.prisma.actionToken.update({
+        where: { id: record.id },
+        data: { usedAt: now },
+      }),
+    ]);
+
+    return { message: "Xác minh email thành công. Cảm ơn bạn!" };
+  }
+
+  /** Gửi lại email xác minh cho người dùng đang đăng nhập nhưng chưa xác minh */
+  async resendVerificationEmail(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        emailVerified: true,
+        isActive: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException("Người dùng không tồn tại");
+    }
+    if (user.emailVerified) {
+      throw new BadRequestException("Email của bạn đã được xác minh trước đó");
+    }
+
+    const token = await this.createActionToken(
+      user.id,
+      ActionTokenPurpose.EMAIL_VERIFY,
+      24 * 60 * 60 * 1000,
+    );
+    await this.mail.sendVerificationEmail(user.email, user.fullName, token);
+
+    return { message: "Đã gửi lại email xác minh. Vui lòng kiểm tra hộp thư." };
   }
 }
