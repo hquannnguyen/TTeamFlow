@@ -22,9 +22,12 @@
     "test:dashboard": "tsx test/dashboard.spec.ts",
     "test:comments": "tsx test/comments.spec.ts",
     "test:notifications": "tsx test/notifications.spec.ts",
-    "test:all": "tsx test/guards.spec.ts && tsx test/kanban-reorder.spec.ts && tsx test/activity-logs.spec.ts && tsx test/members.spec.ts && tsx test/admin.spec.ts && tsx test/dashboard.spec.ts && tsx test/comments.spec.ts && tsx test/notifications.spec.ts"
+    "test:attachments": "tsx test/attachments.spec.ts",
+    "test:all": "tsx test/guards.spec.ts && tsx test/kanban-reorder.spec.ts && tsx test/activity-logs.spec.ts && tsx test/members.spec.ts && tsx test/admin.spec.ts && tsx test/dashboard.spec.ts && tsx test/comments.spec.ts && tsx test/notifications.spec.ts && tsx test/task-move.spec.ts && tsx test/attachments.spec.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
+    "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.1.6",

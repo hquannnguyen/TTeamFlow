@@ -14,11 +14,14 @@ import { ChecklistsModule } from "./modules/checklists/checklists.module";
 import { CommentsModule } from "./modules/comments/comments.module";
 import { AdminModule } from "./modules/admin/admin.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { AttachmentsModule } from "./modules/attachments/attachments.module";
+import { S3Module } from "./common/s3/s3.module";
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    S3Module,
     HealthModule,
     AuthModule,
     UsersModule,
@@ -32,6 +35,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
     CommentsModule,
     AdminModule,
     NotificationsModule,
+    AttachmentsModule,
   ],
 })
 export class AppModule {}
