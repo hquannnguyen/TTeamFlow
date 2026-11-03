@@ -154,6 +154,13 @@ export function LoginForm({ onSwitch }: { onSwitch: () => void }) {
           )}
         </div>
 
+        {/* Forgot password link */}
+        <p style={{ margin: 0, textAlign: 'right', fontSize: 13 }}>
+          <a href="/forgot-password" onClick={(e) => { e.preventDefault(); window.location.href = '/forgot-password'; }}>
+            Quên mật khẩu?
+          </a>
+        </p>
+
         {/* Submit */}
         <button
           type="submit"

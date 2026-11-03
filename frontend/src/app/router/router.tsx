@@ -12,6 +12,9 @@ import { ProjectActivityPage } from '../../features/activity/pages/ProjectActivi
 import { TaskDetailPage } from '../../features/kanban/pages/TaskDetailPage';
 import { AdminRoute } from './AdminRoute';
 import { AdminUsersPage } from '../../features/admin/pages/AdminUsersPage';
+import { ForgotPasswordPage } from '../../features/auth/pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '../../features/auth/pages/ResetPasswordPage';
+import { VerifyEmailPage } from '../../features/auth/pages/VerifyEmailPage';
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +23,18 @@ export const router = createBrowserRouter([
       { path: '/login', element: null },
       { path: '/register', element: null },
     ],
+  },
+  {
+    element: <ForgotPasswordPage />,
+    path: '/forgot-password',
+  },
+  {
+    element: <ResetPasswordPage />,
+    path: '/reset-password',
+  },
+  {
+    element: <VerifyEmailPage />,
+    path: '/verify-email',
   },
   {
     element: <ProtectedRoute />,
