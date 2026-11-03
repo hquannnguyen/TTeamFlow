@@ -6,4 +6,5 @@ export interface AuthUser {
   fullName?: string;
   avatarUrl?: string | null;
   systemRole: SystemRole;
+  emailVerified?: boolean;
 }

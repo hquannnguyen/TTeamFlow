@@ -105,6 +105,7 @@ export class AuthService {
         email: user.email,
         systemRole: user.systemRole,
         avatarUrl: user.avatarUrl,
+        emailVerified: user.emailVerified,
       },
     };
   }
