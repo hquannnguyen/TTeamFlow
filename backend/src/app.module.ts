@@ -10,6 +10,7 @@ import { ProjectsModule } from "./modules/projects/projects.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
 import { UsersModule } from "./modules/users/users.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { RealtimeModule } from "./common/realtime/realtime.module";
 import { ChecklistsModule } from "./modules/checklists/checklists.module";
 import { CommentsModule } from "./modules/comments/comments.module";
 import { AdminModule } from "./modules/admin/admin.module";
@@ -19,6 +20,7 @@ import { NotificationsModule } from "./modules/notifications/notifications.modul
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    RealtimeModule,
     HealthModule,
     AuthModule,
     UsersModule,

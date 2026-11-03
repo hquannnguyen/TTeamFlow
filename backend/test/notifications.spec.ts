@@ -1,8 +1,12 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
+﻿/* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import assert from "node:assert";
 import { ForbiddenException } from "@nestjs/common";
 import { NotificationType } from "@prisma/client";
 import { NotificationsService } from "../src/modules/notifications/notifications.service";
+
+function makeMockGateway() {
+  return { emitToUser: () => undefined, disconnectUser: () => undefined };
+}
 
 async function runTests() {
   console.log("🚀 Bắt đầu kiểm thử Notifications Service...\n");
@@ -33,7 +37,7 @@ async function runTests() {
       },
     };
 
-    const service = new NotificationsService(mockPrisma);
+    const service = new NotificationsService(mockPrisma, makeMockGateway() as any);
     const result = await service.getUserNotifications(userId, {
       page: 1,
       limit: 10,
@@ -53,7 +57,7 @@ async function runTests() {
       },
     };
 
-    const service = new NotificationsService(mockPrisma);
+    const service = new NotificationsService(mockPrisma, makeMockGateway() as any);
     const result = await service.getUnreadCount(userId);
     assert.strictEqual(result.unreadCount, 5);
     console.log("✔ Test 2: Đếm số lượng thông báo chưa đọc chính xác");
@@ -78,7 +82,7 @@ async function runTests() {
       },
     };
 
-    const service = new NotificationsService(mockPrisma);
+    const service = new NotificationsService(mockPrisma, makeMockGateway() as any);
     const result = await service.markAsRead("notif-1", userId);
     assert.strictEqual(result.isRead, true);
     assert.strictEqual(updated, true);
@@ -99,7 +103,7 @@ async function runTests() {
       },
     };
 
-    const service = new NotificationsService(mockPrisma);
+    const service = new NotificationsService(mockPrisma, makeMockGateway() as any);
     await assert.rejects(
       () => service.markAsRead("notif-1", otherUserId),
       ForbiddenException,
@@ -119,7 +123,7 @@ async function runTests() {
       },
     };
 
-    const service = new NotificationsService(mockPrisma);
+    const service = new NotificationsService(mockPrisma, makeMockGateway() as any);
     const result = await service.markAllAsRead(userId);
     assert.strictEqual(result.success, true);
     assert.strictEqual(result.updatedCount, 3);
@@ -139,7 +143,7 @@ async function runTests() {
       },
     };
 
-    const service = new NotificationsService(mockPrisma);
+    const service = new NotificationsService(mockPrisma, makeMockGateway() as any);
     const result = await service.create({
       userId,
       actorId: userId, // Same user on comment -> must be ignored
@@ -173,7 +177,7 @@ async function runTests() {
       },
     };
 
-    const service = new NotificationsService(mockPrisma);
+    const service = new NotificationsService(mockPrisma, makeMockGateway() as any);
     const res = await service.remove("notif-1", userId);
     assert.strictEqual(res.success, true);
     assert.strictEqual(deleted, true);
@@ -197,7 +201,7 @@ async function runTests() {
       },
     };
 
-    const service = new NotificationsService(mockPrisma);
+    const service = new NotificationsService(mockPrisma, makeMockGateway() as any);
     const result = await service.createMany([
       {
         userId: "user-target",
