@@ -23,6 +23,7 @@ import { getMediaUrl } from '../../../api/http';
 import { toast } from '../../../components/ui/toast.store';
 import { MemberAutocomplete } from '../components/MemberAutocomplete';
 import { broadcastNotificationUpdate } from '../../notifications/utils/broadcast.util';
+import { AttachmentSection } from '../../attachments/components/AttachmentSection';
 
 function getInitials(name?: string) {
   if (!name) return '?';
@@ -131,7 +132,7 @@ export function TaskDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [activeTab, setActiveTab] = useState<'desc' | 'checklists'>('desc');
+  const [activeTab, setActiveTab] = useState<'desc' | 'checklists' | 'attachments'>('desc');
   const [activeBottomTab, setActiveBottomTab] = useState<'comments' | 'activity'>('comments');
 
   const [description, setDescription] = useState('');
@@ -830,6 +831,13 @@ export function TaskDetailPage() {
             >
               Nhiệm vụ phụ ({checklists.length})
             </button>
+            <button
+              type="button"
+              className={`task-tab-btn ${activeTab === 'attachments' ? 'active' : ''}`}
+              onClick={() => setActiveTab('attachments')}
+            >
+              📎 Tệp đính kèm
+            </button>
           </div>
 
           <div className="task-tab-content">
@@ -856,7 +864,7 @@ export function TaskDetailPage() {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : activeTab === 'checklists' ? (
               <div className="task-checklists-box">
                 {checklists.length > 0 && (() => {
                   const done = checklists.filter((c) => Boolean(c.isCompleted ?? c.isDone)).length;
@@ -943,6 +951,8 @@ export function TaskDetailPage() {
                   </form>
                 )}
               </div>
+            ) : (
+              <AttachmentSection taskId={taskId} canManage={!isArchived} />
             )}
           </div>
         </div>
