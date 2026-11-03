@@ -24,9 +24,7 @@ export interface DashboardMetrics {
   completedTasks: number;
   overdueTasks: number;
   progress: number;
-  targetProgress?: number;
   activeTasks?: number;
-  growthRate?: number;
   statusDistribution: StatusDistributionItem[];
   memberWorkload: MemberWorkloadItem[];
 }

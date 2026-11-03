@@ -60,9 +60,17 @@ export class TasksService {
     });
 
     const task = await this.prisma.$transaction(async (tx) => {
+      // Khóa dòng project để hai lần tạo đồng thời không nhận cùng một số
+      await tx.$queryRaw`SELECT id FROM projects WHERE id = ${projectId}::uuid FOR UPDATE`;
+      const lastNumber = await tx.task.aggregate({
+        where: { projectId },
+        _max: { taskNumber: true },
+      });
+
       const created = await tx.task.create({
         data: {
           projectId,
+          taskNumber: (lastNumber._max.taskNumber ?? 0) + 1,
           columnId: dto.columnId,
           creatorId,
           title: dto.title.trim(),
@@ -288,7 +296,11 @@ export class TasksService {
     return task.projectId;
   }
 
-  async getDetail(taskId: string, actorId: string) {
+  async getDetail(
+    taskId: string,
+    actorId: string,
+    systemRole: SystemRole = SystemRole.USER,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
       include: {
@@ -310,14 +322,19 @@ export class TasksService {
         projectId_userId: { projectId: task.projectId, userId: actorId },
       },
     });
-    if (!member) {
+    if (!member && systemRole !== SystemRole.ADMIN) {
       throw new ForbiddenException("Bạn không có quyền trong dự án này");
     }
 
     return task;
   }
 
-  async update(taskId: string, actorId: string, dto: UpdateTaskDto) {
+  async update(
+    taskId: string,
+    actorId: string,
+    dto: UpdateTaskDto,
+    systemRole: SystemRole = SystemRole.USER,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
       include: {
@@ -337,7 +354,10 @@ export class TasksService {
         projectId_userId: { projectId: task.projectId, userId: actorId },
       },
     });
-    if (!member || member.role === ProjectRole.VIEWER) {
+    if (
+      systemRole !== SystemRole.ADMIN &&
+      (!member || member.role === ProjectRole.VIEWER)
+    ) {
       throw new ForbiddenException("Bạn không có quyền cập nhật task này");
     }
 
@@ -687,7 +707,11 @@ export class TasksService {
     return updatedTask;
   }
 
-  async remove(taskId: string, actorId: string) {
+  async remove(
+    taskId: string,
+    actorId: string,
+    systemRole: SystemRole = SystemRole.USER,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
     });
@@ -699,8 +723,10 @@ export class TasksService {
       },
     });
     if (
-      !member ||
-      (member.role !== ProjectRole.OWNER && member.role !== ProjectRole.MANAGER)
+      systemRole !== SystemRole.ADMIN &&
+      (!member ||
+        (member.role !== ProjectRole.OWNER &&
+          member.role !== ProjectRole.MANAGER))
     ) {
       throw new ForbiddenException("Bạn không có quyền xóa task này");
     }
@@ -725,7 +751,12 @@ export class TasksService {
     });
   }
 
-  async assign(taskId: string, actorId: string, targetUserId: string) {
+  async assign(
+    taskId: string,
+    actorId: string,
+    targetUserId: string,
+    systemRole: SystemRole = SystemRole.USER,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
     });
@@ -736,7 +767,10 @@ export class TasksService {
         projectId_userId: { projectId: task.projectId, userId: actorId },
       },
     });
-    if (!actorMember || actorMember.role === ProjectRole.VIEWER) {
+    if (
+      systemRole !== SystemRole.ADMIN &&
+      (!actorMember || actorMember.role === ProjectRole.VIEWER)
+    ) {
       throw new ForbiddenException(
         "Bạn không có quyền gán thành viên vào task",
       );
@@ -804,7 +838,12 @@ export class TasksService {
     return assignment;
   }
 
-  async unassign(taskId: string, actorId: string, targetUserId: string) {
+  async unassign(
+    taskId: string,
+    actorId: string,
+    targetUserId: string,
+    systemRole: SystemRole = SystemRole.USER,
+  ) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, deletedAt: null },
     });
@@ -815,7 +854,10 @@ export class TasksService {
         projectId_userId: { projectId: task.projectId, userId: actorId },
       },
     });
-    if (!actorMember || actorMember.role === ProjectRole.VIEWER) {
+    if (
+      systemRole !== SystemRole.ADMIN &&
+      (!actorMember || actorMember.role === ProjectRole.VIEWER)
+    ) {
       throw new ForbiddenException(
         "Bạn không có quyền gỡ thành viên khỏi task",
       );

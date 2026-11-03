@@ -92,7 +92,7 @@ export function DashboardCharts({ metrics }: DashboardChartsProps) {
           {/* Legend */}
           <div className="donut-legend">
             {dist.length === 0 || total === 0 ? (
-              <div style={{ color: '#94a3b8', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>
+              <div style={{ color: 'var(--slate-400)', fontSize: '13px', textAlign: 'center', padding: '12px 0' }}>
                 Chưa có dữ liệu trạng thái
               </div>
             ) : (
@@ -124,7 +124,7 @@ export function DashboardCharts({ metrics }: DashboardChartsProps) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '48px 16px',
-                color: '#94a3b8',
+                color: 'var(--slate-400)',
                 fontSize: '13.5px',
               }}
             >
@@ -231,11 +231,11 @@ export function DashboardCharts({ metrics }: DashboardChartsProps) {
         {members.length > 0 && (
           <div className="workload-legend">
             <div className="legend-chip">
-              <span className="legend-dot" style={{ background: '#3b82f6' }}></span>
+              <span className="legend-dot" style={{ background: 'var(--blue-500)' }}></span>
               <span>ĐANG XỬ LÝ</span>
             </div>
             <div className="legend-chip">
-              <span className="legend-dot" style={{ background: '#ef4444' }}></span>
+              <span className="legend-dot" style={{ background: 'var(--red-500)' }}></span>
               <span>TẢI CAO (≥8)</span>
             </div>
           </div>

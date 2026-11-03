@@ -56,11 +56,11 @@ function Toast({ message, type, onDismiss }: { message: string; type: 'success' 
   return (
     <div className={`toast toast-${type}`} role="alert" aria-live="polite">
       {type === 'success' ? (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="u-shrink-0">
           <polyline points="20 6 9 17 4 12" />
         </svg>
       ) : (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="u-shrink-0">
           <circle cx="12" cy="12" r="10" /><line x1="12" x2="12" y1="8" y2="12" /><line x1="12" x2="12.01" y1="16" y2="16" />
         </svg>
       )}
@@ -84,6 +84,11 @@ export function ProfilePage() {
   const [loadError, setLoadError] = useState('');
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [profile?.avatarUrl]);
 
   // ── Load profile ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -207,11 +212,12 @@ export function ProfilePage() {
           {/* ── Left: Avatar card ─────────────────────────────────────── */}
           <div className="profile-card profile-avatar-card">
             <div className="avatar-upload-ring" onClick={() => fileInputRef.current?.click()}>
-              {getMediaUrl(profile?.avatarUrl) ? (
+              {!avatarError && getMediaUrl(profile?.avatarUrl) ? (
                 <img
                   src={getMediaUrl(profile?.avatarUrl)!}
                   alt={displayName}
                   className="avatar-img"
+                  onError={() => setAvatarError(true)}
                 />
               ) : (
                 <div className="avatar-initials">{initials}</div>

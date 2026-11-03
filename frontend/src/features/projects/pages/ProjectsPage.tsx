@@ -175,9 +175,17 @@ export function ProjectsPage() {
 
   // Determine user's role in a given project
   function getUserRoleInProject(project: Project) {
-    if (currentUser?.systemRole === 'ADMIN') return 'OWNER';
     const member = project.members?.find((m) => m.user?.id === currentUser?.id);
-    return member?.role || project.members?.[0]?.role || 'MEMBER';
+    if (member) return member.role;
+    // Admin hệ thống có toàn quyền quản trị dù không là thành viên
+    return currentUser?.systemRole === 'ADMIN' ? 'OWNER' : 'VIEWER';
+  }
+
+  function isAdminViewer(project: Project) {
+    return (
+      currentUser?.systemRole === 'ADMIN' &&
+      !project.members?.some((m) => m.user?.id === currentUser?.id)
+    );
   }
 
   // Handlers
@@ -715,6 +723,7 @@ export function ProjectsPage() {
                 key={project.id}
                 project={project}
                 currentUserRole={getUserRoleInProject(project)}
+                isAdminViewer={isAdminViewer(project)}
                 onEdit={handleOpenEdit}
                 onArchive={handleOpenArchive}
                 onRestore={handleOpenRestore}

@@ -1,7 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '../../components/layout/AppLayout';
-import { LoginPage } from '../../features/auth/pages/LoginPage';
-import { RegisterPage } from '../../features/auth/pages/RegisterPage';
+import { AuthPage } from '../../features/auth/pages/AuthPage';
 import { ProjectBoardPage } from '../../features/kanban/pages/ProjectBoardPage';
 import { ProjectsPage } from '../../features/projects/pages/ProjectsPage';
 import { ProtectedRoute } from './ProtectedRoute';
@@ -16,12 +15,11 @@ import { AdminUsersPage } from '../../features/admin/pages/AdminUsersPage';
 
 export const router = createBrowserRouter([
   {
-    path: '/login',
-    element: <LoginPage />,
-  },
-  {
-    path: '/register',
-    element: <RegisterPage />,
+    element: <AuthPage />,
+    children: [
+      { path: '/login', element: null },
+      { path: '/register', element: null },
+    ],
   },
   {
     element: <ProtectedRoute />,

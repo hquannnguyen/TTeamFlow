@@ -14,7 +14,7 @@ function ToastIcon({ type }: { type: ToastItem['type'] }) {
           strokeWidth="2.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ flexShrink: 0 }}
+          className="u-shrink-0"
           aria-hidden="true"
         >
           <polyline points="20 6 9 17 4 12" />
@@ -31,7 +31,7 @@ function ToastIcon({ type }: { type: ToastItem['type'] }) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ flexShrink: 0 }}
+          className="u-shrink-0"
           aria-hidden="true"
         >
           <circle cx="12" cy="12" r="10" />
@@ -50,7 +50,7 @@ function ToastIcon({ type }: { type: ToastItem['type'] }) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ flexShrink: 0 }}
+          className="u-shrink-0"
           aria-hidden="true"
         >
           <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
@@ -70,7 +70,7 @@ function ToastIcon({ type }: { type: ToastItem['type'] }) {
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          style={{ flexShrink: 0 }}
+          className="u-shrink-0"
           aria-hidden="true"
         >
           <circle cx="12" cy="12" r="10" />

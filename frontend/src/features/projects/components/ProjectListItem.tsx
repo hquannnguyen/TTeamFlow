@@ -7,6 +7,8 @@ import { getMediaUrl } from '../../../api/http';
 interface ProjectListItemProps {
   project: Project;
   currentUserRole?: ProjectRole;
+  /** Admin hệ thống xem dự án mà họ không phải thành viên */
+  isAdminViewer?: boolean;
   onEdit: (project: Project) => void;
   onArchive: (project: Project) => void;
   onRestore: (project: Project) => void;
@@ -68,6 +70,7 @@ function formatRelativeTime(dateStr: string) {
 export function ProjectListItem({
   project,
   currentUserRole,
+  isAdminViewer,
   onEdit,
   onArchive,
   onRestore,
@@ -95,8 +98,9 @@ export function ProjectListItem({
   const displayedMembers = project.members.slice(0, 3);
   const extraMembersCount = Math.max(0, project.members.length - 3);
 
-  const roleStyle =
-    currentUserRole === 'OWNER'
+  const roleStyle = isAdminViewer
+    ? { bg: '#E0E7FF', color: '#3730A3', label: 'Quản trị viên' }
+    : currentUserRole === 'OWNER'
       ? { bg: '#FEF3C7', color: '#92400E', label: 'Chủ sở hữu' }
       : currentUserRole === 'MANAGER'
         ? { bg: '#EDE9FE', color: '#5B21B6', label: 'Quản lý' }

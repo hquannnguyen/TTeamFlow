@@ -145,6 +145,7 @@ export function ProjectCard({
       {/* Top Accent Color Bar */}
       <div
         className={`project-card-accent-bar ${isArchived ? 'archived' : ''}`}
+        data-key={project.projectKey}
         style={!isArchived ? { background: theme.accentGradient } : undefined}
       />
 

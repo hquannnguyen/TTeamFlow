@@ -19,6 +19,7 @@ async function runTests() {
     {
       id: "col-1",
       name: "TODO",
+      type: "TODO",
       isCompleted: false,
       position: 1000,
       _count: { tasks: 12 },
@@ -26,6 +27,7 @@ async function runTests() {
     {
       id: "col-2",
       name: "IN_PROGRESS",
+      type: "DOING",
       isCompleted: false,
       position: 2000,
       _count: { tasks: 10 },
@@ -33,10 +35,28 @@ async function runTests() {
     {
       id: "col-3",
       name: "DONE",
+      type: "DONE",
       isCompleted: true,
       position: 3000,
       _count: { tasks: 20 },
     },
+  ];
+
+  const task = (
+    completed: boolean,
+    type: "TODO" | "DOING" | "DONE",
+  ) => ({
+    completedAt: completed ? new Date() : null,
+    column: { type, isCompleted: completed },
+  });
+  const mockAssignments = [
+    ...Array.from({ length: 6 }, () => ({
+      userId: "user-2",
+      task: task(false, "DOING"),
+    })),
+    { userId: "user-2", task: task(false, "TODO") },
+    { userId: "user-2", task: task(true, "DONE") },
+    { userId: "user-2", task: task(true, "DONE") },
   ];
 
   const mockWorkloads = [
@@ -95,6 +115,7 @@ async function runTests() {
         return mockWorkloads;
       },
     },
+    taskAssignment: { findMany: async () => mockAssignments },
   } as unknown as PrismaService;
 
   const dashboardService = new DashboardService(mockPrisma);
@@ -121,6 +142,7 @@ async function runTests() {
     task: { count: async () => 0 },
     kanbanColumn: { findMany: async () => [] },
     projectMember: { findMany: async () => [] },
+    taskAssignment: { findMany: async () => [] },
   } as unknown as PrismaService;
 
   const emptyDashboardService = new DashboardService(emptyPrisma);
@@ -152,6 +174,7 @@ async function runTests() {
     },
     kanbanColumn: { findMany: async () => [] },
     projectMember: { findMany: async () => [] },
+    taskAssignment: { findMany: async () => [] },
   } as unknown as PrismaService;
 
   const spyService = new DashboardService(spyPrisma);
@@ -256,6 +279,7 @@ async function runTests() {
     },
     kanbanColumn: { findMany: async () => [] },
     projectMember: { findMany: async () => [] },
+    taskAssignment: { findMany: async () => [] },
   } as unknown as PrismaService;
 
   const deleteCheckService = new DashboardService(deleteCheckPrisma);
@@ -268,8 +292,30 @@ async function runTests() {
   );
   console.log("✅ TC-8: Khẳng định 100% không tính task đã bị xóa mềm");
 
+  // --- TC-9: "Đang làm" chỉ tính cột không phải TODO và không phải cột hoàn thành ---
+  console.log("--- Test Case 9: activeTasks loại trừ cột TODO và cột hoàn thành ---");
+  assert.strictEqual(
+    metrics.activeTasks,
+    10,
+    "Chỉ cột IN_PROGRESS (10 task) được tính là đang làm",
+  );
+  console.log("✅ TC-9: activeTasks = 10 (không cộng cột TODO=12 và DONE=20)");
+
+  // --- TC-10: Chi tiết theo thành viên + cờ quá tải ---
+  console.log("--- Test Case 10: Breakdown theo thành viên và isOverloaded ---");
+  const heavy = metrics.memberWorkload.find((m) => m.userId === "user-2")!;
+  assert.strictEqual(heavy.totalTaskCount, 9);
+  assert.strictEqual(heavy.completedCount, 2);
+  assert.strictEqual(heavy.inProgressCount, 6);
+  assert.strictEqual(heavy.todoCount, 1);
+  assert.strictEqual(heavy.isOverloaded, true, "10 task chưa xong => quá tải");
+  const light = metrics.memberWorkload.find((m) => m.userId === "user-1")!;
+  assert.strictEqual(light.totalTaskCount, 0);
+  assert.strictEqual(light.isOverloaded, false);
+  console.log("✅ TC-10: Breakdown đúng và isOverloaded theo ngưỡng 8");
+
   console.log(
-    "\n🎉 TOÀN BỘ 8/8 TEST CASES CHO TASK 26 ĐÃ PASS THÀNH CÔNG 100%!\n",
+    "\n🎉 TOÀN BỘ 10/10 TEST CASES CHO TASK 26 ĐÃ PASS THÀNH CÔNG 100%!\n",
   );
 }
 

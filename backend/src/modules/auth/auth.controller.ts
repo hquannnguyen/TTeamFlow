@@ -8,21 +8,44 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Public } from "../../common/decorators/public.decorator";
+import {
+  RateLimit,
+  RateLimitGuard,
+} from "../../common/guards/rate-limit.guard";
 import type { AuthUser } from "../../common/interfaces/auth-user.interface";
 import { AuthService } from "./auth.service";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 
+const getRefreshTokenCookieOptions = () => {
+  const isSecure =
+    process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === "true"
+      : process.env.NODE_ENV === "production" &&
+        (process.env.FRONTEND_ORIGIN?.startsWith("https://") ?? false);
+
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: isSecure,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/api/v1/auth",
+  };
+};
+
 @Controller("auth")
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 10, windowMs: 60 * 60 * 1000 })
   @Post("register")
   @HttpCode(201)
   register(@Body() dto: RegisterDto) {
@@ -30,6 +53,8 @@ export class AuthController {
   }
 
   @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 10, windowMs: 15 * 60 * 1000 })
   @Post("login")
   async login(
     @Body() dto: LoginDto,
@@ -37,13 +62,11 @@ export class AuthController {
   ) {
     const result = await this.authService.login(dto);
 
-    response.cookie("refresh_token", result.refreshToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/api/v1/auth",
-    });
+    response.cookie(
+      "refresh_token",
+      result.refreshToken,
+      getRefreshTokenCookieOptions(),
+    );
 
     const { refreshToken: _hidden, ...publicResult } = result;
     void _hidden;
@@ -61,13 +84,11 @@ export class AuthController {
 
     const result = await this.authService.refresh(refreshToken);
 
-    response.cookie("refresh_token", result.refreshToken, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: "/api/v1/auth",
-    });
+    response.cookie(
+      "refresh_token",
+      result.refreshToken,
+      getRefreshTokenCookieOptions(),
+    );
 
     return { accessToken: result.accessToken };
   }

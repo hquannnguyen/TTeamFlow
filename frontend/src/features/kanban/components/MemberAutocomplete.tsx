@@ -134,10 +134,23 @@ export function MemberAutocomplete({
         >
           <div className="member-ac-user-info">
             {avatar ? (
-              <img src={avatar} alt={selectedMember.fullName} className="member-ac-avatar" />
-            ) : (
-              <div className="member-ac-avatar">{getInitials(selectedMember.fullName)}</div>
-            )}
+              <img
+                src={avatar}
+                alt={selectedMember.fullName}
+                className="member-ac-avatar"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                  if (fb) fb.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <div
+              className="member-ac-avatar"
+              style={{ display: avatar ? 'none' : 'flex' }}
+            >
+              {getInitials(selectedMember.fullName)}
+            </div>
             <span className="member-ac-selected-name">{selectedMember.fullName}</span>
           </div>
           {!disabled && (
@@ -211,10 +224,23 @@ export function MemberAutocomplete({
                   }}
                 >
                   {avatar ? (
-                    <img src={avatar} alt={m.user.fullName} className="member-ac-avatar" />
-                  ) : (
-                    <div className="member-ac-avatar">{getInitials(m.user.fullName)}</div>
-                  )}
+                    <img
+                      src={avatar}
+                      alt={m.user.fullName}
+                      className="member-ac-avatar"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const fb = e.currentTarget.nextElementSibling as HTMLElement | null;
+                        if (fb) fb.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className="member-ac-avatar"
+                    style={{ display: avatar ? 'none' : 'flex' }}
+                  >
+                    {getInitials(m.user.fullName)}
+                  </div>
                   <div className="member-ac-details">
                     <span className="member-ac-name">
                       {highlightMatch(m.user.fullName, query)}
