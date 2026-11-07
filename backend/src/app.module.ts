@@ -10,6 +10,7 @@ import { ProjectsModule } from "./modules/projects/projects.module";
 import { TasksModule } from "./modules/tasks/tasks.module";
 import { UsersModule } from "./modules/users/users.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { MailModule } from "./common/mail/mail.module";
 import { ChecklistsModule } from "./modules/checklists/checklists.module";
 import { CommentsModule } from "./modules/comments/comments.module";
 import { AdminModule } from "./modules/admin/admin.module";
@@ -22,6 +23,7 @@ import { S3Module } from "./common/s3/s3.module";
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     S3Module,
+    MailModule,
     HealthModule,
     AuthModule,
     UsersModule,

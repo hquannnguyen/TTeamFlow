@@ -33,6 +33,7 @@ export function AppLayout() {
   const [showHelp, setShowHelp] = useState(false);
   const { theme, toggle: toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Đóng menu mobile khi chuyển trang
@@ -441,6 +442,55 @@ export function AppLayout() {
 
         {/* Content Body */}
         <main className="content">
+          {user && user.emailVerified === false && (
+            <div
+              role="status"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                flexWrap: 'wrap',
+                margin: '12px 20px 0',
+                padding: '10px 16px',
+                borderRadius: 10,
+                background: '#fff7ed',
+                border: '1px solid #fdba74',
+                color: '#9a3412',
+                fontSize: 13.5,
+              }}
+            >
+              <span>
+                ⚠️ Email của bạn chưa được xác minh. Hãy xác minh để bảo vệ tài khoản.
+              </span>
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{ padding: '4px 12px', fontSize: 13 }}
+                disabled={resendState === 'sending' || resendState === 'sent'}
+                onClick={async () => {
+                  setResendState('sending');
+                  try {
+                    const { resendVerification } = await import(
+                      '../../features/auth/api/auth.api'
+                    );
+                    await resendVerification();
+                    setResendState('sent');
+                  } catch {
+                    setResendState('error');
+                  }
+                }}
+              >
+                {resendState === 'sending'
+                  ? 'Đang gửi...'
+                  : resendState === 'sent'
+                    ? 'Đã gửi ✓ Kiểm tra hộp thư'
+                    : resendState === 'error'
+                      ? 'Gửi lại thất bại — thử lại'
+                      : 'Gửi lại email xác minh'}
+              </button>
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

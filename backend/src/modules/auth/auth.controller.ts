@@ -22,6 +22,9 @@ import { AuthService } from "./auth.service";
 import { ChangePasswordDto } from "./dto/change-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { ForgotPasswordDto } from "./dto/forgot-password.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { VerifyEmailDto } from "./dto/verify-email.dto";
 
 const getRefreshTokenCookieOptions = () => {
   const isSecure =
@@ -116,6 +119,43 @@ export class AuthController {
     const result = await this.authService.changePassword(user.id, dto);
     response.clearCookie("refresh_token", { path: "/api/v1/auth" });
     return result;
+  }
+
+  // ── Quên / đặt lại mật khẩu & xác minh email ────────────────────────────────
+
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 5, windowMs: 15 * 60 * 1000 })
+  @Post("forgot-password")
+  @HttpCode(200)
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 10, windowMs: 60 * 60 * 1000 })
+  @Post("reset-password")
+  @HttpCode(200)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
+
+  @Public()
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 10, windowMs: 60 * 60 * 1000 })
+  @Post("verify-email")
+  @HttpCode(200)
+  verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto.token);
+  }
+
+  @Post("resend-verification")
+  @HttpCode(200)
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ limit: 3, windowMs: 60 * 1000 })
+  resendVerification(@CurrentUser() user: AuthUser) {
+    return this.authService.resendVerificationEmail(user.id);
   }
 
   @Get("me")

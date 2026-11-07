@@ -54,3 +54,36 @@ export async function getMe(): Promise<AuthUser> {
 export async function logout(): Promise<void> {
   await authHttp.post('/auth/logout');
 }
+
+// ── Quên / đặt lại mật khẩu & xác minh email ─────────────────────────────────
+
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const res = await authHttp.post<{ success: true; data: { message: string } }>(
+    '/auth/forgot-password',
+    { email },
+  );
+  return res.data.data;
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  const res = await authHttp.post<{ success: true; data: { message: string } }>(
+    '/auth/reset-password',
+    { token, newPassword },
+  );
+  return res.data.data;
+}
+
+export async function verifyEmail(token: string): Promise<{ message: string }> {
+  const res = await authHttp.post<{ success: true; data: { message: string } }>(
+    '/auth/verify-email',
+    { token },
+  );
+  return res.data.data;
+}
+
+export async function resendVerification(): Promise<{ message: string }> {
+  const res = await http.post<{ success: true; data: { message: string } }>(
+    '/auth/resend-verification',
+  );
+  return res.data.data;
+}

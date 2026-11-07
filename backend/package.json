@@ -23,7 +23,8 @@
     "test:comments": "tsx test/comments.spec.ts",
     "test:notifications": "tsx test/notifications.spec.ts",
     "test:attachments": "tsx test/attachments.spec.ts",
-    "test:all": "tsx test/guards.spec.ts && tsx test/kanban-reorder.spec.ts && tsx test/activity-logs.spec.ts && tsx test/members.spec.ts && tsx test/admin.spec.ts && tsx test/dashboard.spec.ts && tsx test/comments.spec.ts && tsx test/notifications.spec.ts && tsx test/task-move.spec.ts && tsx test/attachments.spec.ts"
+    "test:email-auth": "tsx test/email-auth.spec.ts",
+    "test:all": "tsx test/guards.spec.ts && tsx test/kanban-reorder.spec.ts && tsx test/activity-logs.spec.ts && tsx test/members.spec.ts && tsx test/admin.spec.ts && tsx test/dashboard.spec.ts && tsx test/comments.spec.ts && tsx test/notifications.spec.ts && tsx test/task-move.spec.ts && tsx test/attachments.spec.ts && tsx test/email-auth.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
@@ -41,6 +42,7 @@
     "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
     "helmet": "^8.1.0",
+    "nodemailer": "^10.3.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
@@ -57,6 +59,7 @@
     "@types/express": "^5.0.3",
     "@types/multer": "^2.2.0",
     "@types/node": "^22.18.0",
+    "@types/nodemailer": "^8.0.2",
     "@types/passport-jwt": "^4.0.1",
     "eslint": "^9.34.0",
     "eslint-config-prettier": "^10.1.8",

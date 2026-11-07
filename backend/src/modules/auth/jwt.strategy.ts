@@ -32,6 +32,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         avatarUrl: true,
         systemRole: true,
         isActive: true,
+        emailVerified: true,
         passwordChangedAt: true,
       },
     });
@@ -59,6 +60,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       fullName: user.fullName,
       avatarUrl: user.avatarUrl,
       systemRole: user.systemRole,
+      emailVerified: user.emailVerified,
     };
   }
 }

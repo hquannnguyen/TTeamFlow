@@ -6,6 +6,7 @@ export interface AuthUser {
   email: string;
   systemRole: 'ADMIN' | 'USER';
   avatarUrl?: string | null;
+  emailVerified?: boolean;
 }
 
 interface AuthState {
