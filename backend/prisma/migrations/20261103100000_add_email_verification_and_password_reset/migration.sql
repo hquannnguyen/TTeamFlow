@@ -1,3 +1,6 @@
+-- CreateEnum
+CREATE TYPE "ActionTokenPurpose" AS ENUM ('EMAIL_VERIFY', 'PASSWORD_RESET');
+
 -- AlterTable
 ALTER TABLE "users" ADD COLUMN "email_verified" BOOLEAN NOT NULL DEFAULT false;
 

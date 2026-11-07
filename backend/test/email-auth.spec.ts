@@ -68,7 +68,7 @@ async function runTests() {
         deleteMany: async () => ({}),
         create: async (args: any) => {
           createdPurpose = args.data.purpose;
-          return { id: "tok-1", ...args.data };
+          return { id: "tok-1", ...args.data } as { id: string };
         },
       },
       $transaction: async (ops: any[]) => Promise.all(ops),

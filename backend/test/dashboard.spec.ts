@@ -42,10 +42,7 @@ async function runTests() {
     },
   ];
 
-  const task = (
-    completed: boolean,
-    type: "TODO" | "DOING" | "DONE",
-  ) => ({
+  const task = (completed: boolean, type: "TODO" | "DOING" | "DONE") => ({
     completedAt: completed ? new Date() : null,
     column: { type, isCompleted: completed },
   });
@@ -293,7 +290,9 @@ async function runTests() {
   console.log("✅ TC-8: Khẳng định 100% không tính task đã bị xóa mềm");
 
   // --- TC-9: "Đang làm" chỉ tính cột không phải TODO và không phải cột hoàn thành ---
-  console.log("--- Test Case 9: activeTasks loại trừ cột TODO và cột hoàn thành ---");
+  console.log(
+    "--- Test Case 9: activeTasks loại trừ cột TODO và cột hoàn thành ---",
+  );
   assert.strictEqual(
     metrics.activeTasks,
     10,
@@ -302,7 +301,9 @@ async function runTests() {
   console.log("✅ TC-9: activeTasks = 10 (không cộng cột TODO=12 và DONE=20)");
 
   // --- TC-10: Chi tiết theo thành viên + cờ quá tải ---
-  console.log("--- Test Case 10: Breakdown theo thành viên và isOverloaded ---");
+  console.log(
+    "--- Test Case 10: Breakdown theo thành viên và isOverloaded ---",
+  );
   const heavy = metrics.memberWorkload.find((m) => m.userId === "user-2")!;
   assert.strictEqual(heavy.totalTaskCount, 9);
   assert.strictEqual(heavy.completedCount, 2);
