@@ -11,6 +11,7 @@ import { TasksModule } from "./modules/tasks/tasks.module";
 import { UsersModule } from "./modules/users/users.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { MailModule } from "./common/mail/mail.module";
+import { RealtimeModule } from "./common/realtime/realtime.module";
 import { ChecklistsModule } from "./modules/checklists/checklists.module";
 import { CommentsModule } from "./modules/comments/comments.module";
 import { AdminModule } from "./modules/admin/admin.module";
@@ -24,6 +25,7 @@ import { S3Module } from "./common/s3/s3.module";
     PrismaModule,
     S3Module,
     MailModule,
+    RealtimeModule,
     HealthModule,
     AuthModule,
     UsersModule,

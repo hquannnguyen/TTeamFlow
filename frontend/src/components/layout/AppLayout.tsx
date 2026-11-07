@@ -5,6 +5,7 @@ import logo from '../../assets/logo.png';
 import { getMediaUrl } from '../../api/http';
 import { logout as logoutApi } from '../../features/auth/api/auth.api';
 import { useAuthStore } from '../../features/auth/store/auth.store';
+import { connectNotificationSocket, disconnectNotificationSocket } from '../../realtime/notification.socket';
 import { ChangePasswordModal } from '../../features/profile/components/ChangePasswordModal';
 import { toast } from '../ui/toast.store';
 import { useActiveProjectStore } from '../../features/projects/store/active-project.store';
@@ -97,12 +98,21 @@ export function AppLayout() {
     } catch {
       // ignore
     } finally {
+      disconnectNotificationSocket();
       queryClient.clear();
       logout();
       toast.info('Đã đăng xuất khỏi hệ thống');
       navigate('/login', { replace: true });
     }
   }
+
+  // Kết nối WebSocket nhận thông báo real-time trong suốt phiên đăng nhập
+  useEffect(() => {
+    connectNotificationSocket();
+    return () => {
+      disconnectNotificationSocket();
+    };
+  }, []);
 
   const isDashboardActive = location.pathname === '/dashboard' || location.pathname.includes('/dashboard');
   const isProjectsActive = location.pathname === '/projects';

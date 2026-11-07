@@ -5,12 +5,16 @@ import {
 } from "@nestjs/common";
 import { NotificationType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { NotificationsGateway } from "../../common/realtime/notifications.gateway";
 import { QueryNotificationsDto } from "./dto/query-notifications.dto";
 import { CreateNotificationPayload } from "./interfaces/create-notification.interface";
 
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly gateway: NotificationsGateway,
+  ) {}
 
   async getUserNotifications(userId: string, query: QueryNotificationsDto) {
     const page = query.page ?? 1;
@@ -153,7 +157,7 @@ export class NotificationsService {
       return null;
     }
 
-    return this.prisma.notification.create({
+    const created = await this.prisma.notification.create({
       data: {
         userId: payload.userId,
         actorId: payload.actorId ?? null,
@@ -165,6 +169,11 @@ export class NotificationsService {
         data: (payload.data as Prisma.InputJsonValue) ?? Prisma.JsonNull,
       },
     });
+
+    // Đẩy real-time tới người nhận (nếu đang online)
+    this.gateway.emitToUser(payload.userId, "notification:new", created);
+
+    return created;
   }
 
   async createMany(payloads: CreateNotificationPayload[]) {
@@ -181,7 +190,7 @@ export class NotificationsService {
       return { count: 0 };
     }
 
-    return this.prisma.notification.createMany({
+    const result = await this.prisma.notification.createMany({
       data: validPayloads.map((p) => ({
         userId: p.userId,
         actorId: p.actorId ?? null,
@@ -193,5 +202,15 @@ export class NotificationsService {
         data: (p.data as Prisma.InputJsonValue) ?? Prisma.JsonNull,
       })),
     });
+
+    // Đẩy tín hiệu làm mới cho từng người nhận
+    const notifiedUserIds = [...new Set(validPayloads.map((p) => p.userId))];
+    for (const userId of notifiedUserIds) {
+      this.gateway.emitToUser(userId, "notifications:invalidate", {
+        count: result.count,
+      });
+    }
+
+    return result;
   }
 }
