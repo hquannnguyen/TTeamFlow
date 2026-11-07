@@ -1,6 +1,6 @@
-# Team Project Management — Base Repository
+# TTeamFlow — Hệ thống quản lý dự án nhóm trực quan với Kanban
 
-Base kiến trúc dùng chung cho nhóm:
+Ứng dụng web fullstack quản lý dự án nhóm: bảng Kanban kéo thả, công việc nhiều người thực hiện, thống kê khối lượng, nhật ký hoạt động và thông báo.
 
 - Frontend: React + Vite + TypeScript
 - Reverse proxy/static server: Nginx
@@ -12,33 +12,120 @@ Base kiến trúc dùng chung cho nhóm:
   - SystemRole: `ADMIN`, `USER`
   - ProjectRole: `OWNER`, `MANAGER`, `MEMBER`, `VIEWER`
 
+---
+
 ## 1. Kiến trúc
 
 ```text
 Browser
    |
    v
-Nginx :80
-   |------ / --------> React SPA
-   |
-   `------ /api/* ----> NestJS :3000
-                           |
-                           v
-                         Prisma
-                           |
-                           v
-                      PostgreSQL :5432
+Nginx :80                      ← container frontend
+   |------ /        --------> React SPA (file tĩnh)
+   |------ /api/*   --------> NestJS :3000         ← container backend
+   |------ /uploads/ --------> NestJS (ảnh đại diện)
+                                   |
+                                   v
+                                 Prisma ORM
+                                   |
+                                   v
+                        PostgreSQL :5432       ← container postgres
 ```
 
-Development:
-- React: http://localhost:5173
-- NestJS: http://localhost:3000/api/v1
-- PostgreSQL: localhost:5432
+Docker Compose — 3 container: trình duyệt **chỉ đi qua Nginx**; backend không publish cổng ra ngoài; backend kết nối DB bằng hostname `postgres`, không dùng `localhost`.
 
-Docker:
-- App: http://localhost
-- Browser chỉ đi qua Nginx.
-- Backend kết nối DB bằng hostname `postgres`, không dùng `localhost`.
+### 1.1. Luồng đăng nhập & tự làm mới token
+
+```mermaid
+sequenceDiagram
+    actor U as Người dùng
+    participant FE as React SPA
+    participant NG as Nginx :80
+    participant BE as NestJS API
+    participant DB as PostgreSQL
+
+    U->>FE: Nhập email + mật khẩu
+    FE->>NG: POST /api/v1/auth/login
+    NG->>BE: proxy
+    BE->>DB: Kiểm tra bcrypt hash, isActive
+    BE->>BE: Ký Access Token (15m) + Refresh Token (7d)
+    BE->>DB: Lưu Refresh Token (bản băm)
+    BE-->>NG: { accessToken, user } + Set-Cookie refresh_token (HttpOnly)
+    NG-->>FE: 200 OK
+    FE->>FE: Lưu accessToken (Zustand)
+
+    loop Mỗi request API
+        FE->>NG: GET /api/v1/... + Authorization: Bearer
+        NG->>BE: proxy (Guard: Jwt → SystemRole → ProjectRole)
+        BE-->>FE: { success: true, data }
+    end
+
+    Note over FE,BE: Access Token hết hạn (401)
+    FE->>NG: POST /api/v1/auth/refresh (cookie HttpOnly)
+    NG->>BE: proxy
+    BE->>DB: So khớp hash, rotate Refresh Token
+    BE-->>FE: Access Token mới + cookie mới
+    FE->>NG: Gửi lại request gốc (người dùng không hay biết)
+```
+
+### 1.2. Luồng kéo thả task trên Kanban
+
+```mermaid
+sequenceDiagram
+    actor U as Thành viên (MEMBER+)
+    participant FE as React SPA
+    participant BE as NestJS API
+    participant DB as PostgreSQL
+
+    U->>FE: Kéo thẻ task sang cột khác
+    FE->>FE: Đổi giao diện NGAY (optimistic update)
+    FE->>BE: PATCH /api/v1/tasks/:id/move {columnId, position}
+    BE->>BE: Guard: Jwt → SystemRole → ProjectRole (VIEWER/ARCHIVED chặn)
+    BE->>DB: Transaction + khóa dòng, cập nhật columnId/position
+    BE->>DB: Vào cột hoàn thành → completedAt = NOW(); rời khỏi → completedAt = null
+    BE->>DB: Ghi ActivityLog + Notification
+    BE-->>FE: { success: true, data }
+    FE->>FE: Đồng bộ cache TanStack Query theo trạng thái server
+
+    Note over FE,BE: Thất bại → FE rollback giao diện về trạng thái cũ
+```
+
+### 1.3. Luồng thông báo (polling)
+
+```mermaid
+sequenceDiagram
+    actor A as User A (giao việc)
+    participant BE as NestJS API
+    participant DB as PostgreSQL
+    actor B as User B (nhận việc)
+
+    A->>BE: Giao việc cho B
+    BE->>DB: INSERT Notification
+    B->>BE: GET /notifications/unread-count (mỗi vài giây)
+    BE-->>B: { unreadCount }
+    B->>BE: GET /notifications?unreadOnly
+    BE-->>B: Danh sách thông báo + badge cập nhật
+```
+
+### 1.4. Luồng phân quyền 2 tầng
+
+```mermaid
+sequenceDiagram
+    participant FE as React SPA
+    participant BE as NestJS API
+    participant DB as PostgreSQL
+
+    FE->>BE: PATCH /api/v1/projects/:projectId/members/:id/role
+    BE->>BE: JwtGuard — xác thực Access Token
+    BE->>BE: SystemRoleGuard — ADMIN hay USER?
+    BE->>DB: Đọc ProjectMember của người gọi API
+    BE->>BE: ProjectRoleGuard — role có trong @ProjectRoles?
+    BE->>BE: Service — kiểm tra invariant (archived, OWNER cuối...)
+    BE->>DB: Ghi thay đổi trong transaction
+    BE-->>FE: { success: true, data }
+```
+
+---
 
 ## 2. Chạy bằng Docker
 
@@ -85,11 +172,11 @@ docker compose exec backend npx prisma migrate deploy
 docker compose exec backend npx tsx prisma/seed.ts
 ```
 
+---
+
 ## 3. Chạy development (local, không dùng Docker)
 
 > Yêu cầu: PostgreSQL đang chạy local, đã tạo database `project_management`.
-
-### Lần đầu clone về
 
 **Backend:**
 
@@ -124,6 +211,15 @@ cd backend && npx prisma migrate deploy
 npm install
 ```
 
+### Kiểm thử backend
+
+```bash
+cd backend
+npm run test:all
+```
+
+---
+
 ## 4. Tài khoản seed
 
 ```text
@@ -138,201 +234,157 @@ Member@123
 
 CHỈ dùng cho development.
 
-## 5. Workflow khi thay đổi schema Prisma
+---
+
+## 5. Các tính năng chính
+
+| Nhóm | Chức năng |
+|---|---|
+| Xác thực | Đăng ký, đăng nhập, đổi mật khẩu |
+| Dự án & thành viên | Tạo, lưu trữ (read-only), mời, đổi vai trò |
+| Bảng Kanban | Cột tùy chỉnh, kéo thả task |
+| Công việc | Ưu tiên, hạn chót, nhiều người thực hiện (TaskAssignment) |
+| Checklist & bình luận | Nhiệm vụ phụ có vòng tiến độ, bình luận nhắc tên @ |
+| Tổng quan | Tiến độ, khối lượng từng thành viên, xuất CSV |
+| Nhật ký hoạt động | Append-only, ghi lại mọi thao tác quan trọng |
+| Thông báo | Giao việc, nhắc tên, đổi trạng thái |
+| Quản trị | Tài khoản ADMIN: tìm kiếm, khóa/mở khóa người dùng |
+
+---
+
+## 6. Workflow khi thay đổi schema Prisma
 
 > Áp dụng khi bạn thêm/sửa/xoá model trong `backend/prisma/schema.prisma`.
-
-### Người thực hiện thay đổi schema
 
 ```bash
 # 1. Sửa schema.prisma theo nhu cầu
 
-# 2. Tạo migration file (chạy trên máy local, KHÔNG trong Docker)
+# 2. Tạo migration file (chạy local, KHÔNG trong Docker)
 cd backend
 npx prisma migrate dev --name <tên_thay_đổi>
-# Ví dụ: npx prisma migrate dev --name add_comment_table
 
 # 3. Commit CẢ migration file lên git
 git add prisma/migrations
-git commit -m "feat(<module>): <TenBạn> add <tên_thay_đổi>"
-git push
+git commit -m "feat(<module>): add <tên_thay_đổi>"
 ```
 
 > ⚠️ **Không bao giờ** sửa file trong `prisma/migrations/` sau khi đã commit/merge.
 
-### Người khác trong team (khi pull về có migration mới)
-
-```bash
-git pull
-
-# Docker:
-docker compose exec backend npx prisma migrate deploy
-
-# Local:
-cd backend && npx prisma migrate deploy
-```
-
 ---
 
-## 6. Quy ước kiến trúc Backend
+## 7. Quy ước kiến trúc Backend
 
-Không chia toàn dự án thành `controllers/`, `services/`, `dto/`.
-
-Mỗi business capability là một module:
+Không chia toàn dự án thành `controllers/`, `services/`, `dto/` — mỗi business capability là một module:
 
 ```text
 modules/
-  auth/
-  users/
-  projects/
-  project-members/
-  kanban/
-  tasks/
-  dashboard/
-  activity-logs/
+  auth/          users/           projects/
+  project-members/ kanban/        tasks/
+  dashboard/     activity-logs/   notifications/
+  checklists/    comments/        admin/
 ```
 
-Controller:
-- HTTP only.
-- Validate DTO.
-- Đọc user hiện tại.
-- Gọi service.
-- Không viết Prisma query trực tiếp.
+- **Controller**: HTTP only — validate DTO, đọc user hiện tại, gọi service. Không viết Prisma query trực tiếp.
+- **Service**: business logic, transaction, kiểm tra quyền, gọi PrismaService.
+- **Prisma**: chỉ truy cập qua `PrismaService`, không `new PrismaClient` rải rác.
+- **Ghi nhiều bảng**: bắt buộc dùng transaction.
+- **Quyền**: kiểm tra ở backend bằng Guard + trong Service, không tin giao diện.
 
-Service:
-- Chứa business logic.
-- Transaction.
-- Permission/business invariant.
-- Gọi PrismaService.
-
-Prisma:
-- Chỉ truy cập qua `PrismaService`.
-- Không new PrismaClient rải rác.
-
-## 7. Quy ước RBAC
-
-### System role
-
-`users.systemRole`
+### Chuẩn một request
 
 ```text
-ADMIN
-USER
+Request → Helmet/CORS → ValidationPipe (DTO whitelist)
+        → JwtGuard → SystemRoleGuard → ProjectRoleGuard
+        → Controller → Service → Prisma → PostgreSQL
+Phản hồi thống nhất:
+  thành công: { success: true,  data: ... }
+  lỗi:        { success: false, statusCode, message }
 ```
 
-### Project role
+### Chi tiết bảo mật
 
-`project_members.role`
+- JWT 2 token: Access 15 phút + Refresh 7 ngày trong cookie HttpOnly; frontend tự refresh khi gặp 401
+- Mật khẩu băm bcrypt, bắt buộc độ mạnh; Refresh Token chỉ lưu bản băm trong DB
+- Đổi mật khẩu thu hồi mọi phiên đang có; tài khoản bị khóa không dùng được token cũ
+- Giới hạn đăng nhập 10 lần/15 phút; DTO whitelist từ chối trường thừa; Helmet + CORS giới hạn nguồn
+- Kiểm tra chữ ký thật của ảnh đại diện
+
+---
+
+## 8. Quy ước RBAC
+
+### System role — `users.systemRole`
 
 ```text
-OWNER
-MANAGER
-MEMBER
-VIEWER
+ADMIN   — quản trị nền tảng, thao tác trên mọi dự án
+USER    — người dùng thường
 ```
 
-Một user có thể OWNER ở Project A nhưng MEMBER ở Project B.
+### Project role — `project_members.role`
 
-Không lưu `projectRole` trực tiếp trong bảng User.
+| Quyền thao tác | OWNER | MANAGER | MEMBER | VIEWER |
+|---|:-:|:-:|:-:|:-:|
+| Xem bảng, task, tổng quan, nhật ký | ✓ | ✓ | ✓ | ✓ |
+| Tạo, sửa, kéo thả, gán người, bình luận | ✓ | ✓ | ✓ | ✗ |
+| Xóa task, quản lý cột, mời & đổi vai trò | ✓ | ✓ | ✗ | ✗ |
+| Sửa, lưu trữ, khôi phục dự án | ✓ | ✓ | ✗ | ✗ |
+| Xóa dự án | ✓ | ✗ | ✗ | ✗ |
 
-## 8. Invariants bắt buộc
+Một user có thể OWNER ở Project A nhưng MEMBER ở Project B — quyền dự án lưu trong `ProjectMember`, không lưu trong bảng User.
 
-1. Tạo project phải chạy transaction:
-   - tạo Project;
-   - creator -> OWNER;
-   - tạo TODO;
-   - tạo DOING;
-   - tạo DONE (`isCompleted=true`).
+---
 
-2. Task nhiều assignee:
-   - dùng `TaskAssignment`;
-   - không thêm `assigneeId` vào Task.
+## 9. Invariants bắt buộc
 
-3. Trạng thái Done:
-   - dựa vào `KanbanColumn.isCompleted`;
-   - không dựa vào `column.name === "DONE"`.
+1. Tạo project chạy transaction: tạo Project → creator thành OWNER → tạo TODO, DOING, DONE (`isCompleted=true`)
+2. Task nhiều assignee dùng `TaskAssignment`, không thêm `assigneeId` vào Task
+3. Trạng thái Done dựa vào `KanbanColumn.isCompleted` + `Task.completedAt`, không dựa vào tên cột
+4. Task vào completed column → `completedAt = NOW()`; rời khỏi → `completedAt = null`
+5. `ActivityLog` là append-only — không có API update/delete log
+6. Archived project là read-only
+7. Dự án/task xoá mềm qua `deletedAt` — giữ lịch sử, có thể khôi phục
+8. Mã task theo dự án (SHOP-1, SHOP-2…) cấp trong transaction có khóa dòng, không trùng
+9. Vị trí thẻ Kanban cách nhau 1000; chèn giữa lấy midpoint, sát nhau thì normalize trong transaction
 
-4. Khi task chuyển vào completed column:
-   - `completedAt = NOW()`.
+---
 
-5. Khi task rời completed column:
-   - `completedAt = null`.
+## 10. API
 
-6. `ActivityLog` là append-only:
-   - không tạo API update/delete log.
-
-7. Archived project là read-only.
-
-## 9. API prefix
+Tiền tố chung: `/api/v1` — 52 endpoint REST, phản hồi thống nhất `{ success, data }` / `{ success, statusCode, message }`.
 
 ```text
-/api/v1
+GET  /api/v1/health                    — health check (public)
+
+# Xác thực & người dùng (public: register, login, refresh, logout)
+POST /api/v1/auth/login
+POST /api/v1/auth/refresh
+PATCH /api/v1/auth/change-password
+
+# Dự án & thành viên
+POST /api/v1/projects/:id/members
+
+# Kanban & task
+PATCH /api/v1/tasks/:id/move
+
+# Thông báo
+GET /api/v1/notifications/unread-count
 ```
 
-Health check:
+Chi tiết đầy đủ: [`docs/API_CONVENTIONS.md`](docs/API_CONVENTIONS.md), [`docs/API_REQUEST_RESPONSE.md`](docs/API_REQUEST_RESPONSE.md), kiến trúc: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-```text
-GET /api/v1/health
-```
+---
 
-## 10. Branch convention
+## 11. Biến môi trường (`.env`)
 
-```text
-main
-develop
-feature/auth
-feature/projects
-feature/kanban
-feature/dashboard
-fix/<issue>
-```
-
-Trước khi code hay sửa 1 chức năng nào thì hãy tạo branch mới từ `develop` (phải pull code mới nhất từ `develop` về máy trước) và đặt tên nhánh theo tính năng thay đổi ví dụ: feature/auth, feature/task, feature/kanban, feature/dashboard, fix/<issue> Sau đó khi code xong thì push lên và tạo pull request vào `develop` để mọi người review trước khi merge vào `develop`.
-
-Không push thẳng vào `develop` và `main`.
-
-## 11. Commit convention
-Commit theo chức năng thay đổi (feat(tính năng mới), fix(sửa lỗi), refactor(cải tiến), docs(tài liệu), style(thay đổi về định dạng), test(kiểm thử)). 
-- Chia nhỏ commit. Không thay đổi quá nhiều thứ vào 1 commit.
-```text
-feat(auth): QuanNH add login endpoint
-feat(task): PhongVV support multiple assignees
-fix(kanban): KienTT rollback failed task movement
-refactor(project): QuanNH extract permission policy
-docs(readme): QuanNH update docker guide
-```
-
-## 12. Pull Request checklist
-- [ ] Build pass
-- [ ] Lint pass
-- [ ] DTO có validation
-- [ ] Không expose password/hash/token
-- [ ] API có auth/permission guard đúng
-- [ ] Prisma migration đi kèm khi schema thay đổi
-- [ ] Không sửa migration đã merge
-- [ ] Có xử lý error nghiệp vụ
-- [ ] Không query DB trực tiếp trong Controller
-- [ ] Không hardcode URL/secret
-- Tạo 1 Pull Request vào develop thì phải có ít nhất 1 người(hquannnguyen) approve và merge vào develop. ( Không tự merge PR của chính mình)
-
-### PR convention
-Pull Request template
-
-## Description
-<!-- Provide a brief summary of what this PR does and why it's needed. -->
-
-## Related Issues
-<!-- Link to relevant issues using keywords (e.g., Closes #123). -->
-
-## What's Change
-- [ ] List changes summary
-
-## How Has This Been Tested?
-<!-- Describe the tests you ran to verify your changes. -->
-
-## Checklist
-- [ ] My code follows the coding guidelines of this project.
-- [ ] I have performed a self-review of my own code.
-- [ ] I have updated the documentation accordingly.
-- [ ] Unit test passed
-- [ ] No hardcoded secret
+| Biến | Mặc định | Ghi chú |
+|---|---|---|
+| `POSTGRES_DB` | `project_management` | |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` | `postgres` | |
+| `POSTGRES_PORT` | `5432` | Chỉ gắn `127.0.0.1` |
+| `BACKEND_PORT` | `3000` | Chỉ expose nội bộ Docker |
+| `FRONTEND_PORT` | `80` | Cổng vào duy nhất |
+| `JWT_ACCESS_SECRET` | — | **Bắt buộc**, thiếu sẽ không chạy |
+| `JWT_ACCESS_EXPIRES_IN` | `15m` | |
+| `JWT_REFRESH_SECRET` | — | **Bắt buộc**, thiếu sẽ không chạy |
+| `JWT_REFRESH_EXPIRES_IN` | `7d` | |
+| `FRONTEND_ORIGIN` | `http://localhost:80` | CORS whitelist |
