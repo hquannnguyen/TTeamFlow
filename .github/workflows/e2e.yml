@@ -1,0 +1,51 @@
+name: e2e
+
+on:
+  pull_request:
+    branches: [develop]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Hạ tầng: PostgreSQL + MinIO + backend + frontend
+      - name: Start infrastructure
+        run: docker compose up -d --build postgres minio minio-init backend frontend
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost/api/v1/health && break
+            sleep 5
+          done
+          curl -sf http://localhost/api/v1/health
+
+      - name: Apply migrations & seed
+        run: |
+          docker compose exec -T backend npx prisma migrate deploy
+          docker compose exec -T backend npx tsx prisma/seed.ts
+
+      - name: Install frontend deps & Playwright
+        working-directory: frontend
+        run: |
+          npm ci --legacy-peer-deps
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: http://localhost:80
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
